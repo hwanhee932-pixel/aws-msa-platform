@@ -1,27 +1,45 @@
 name: build-push
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - 'apps/**'
-      - 'build.gradle'
-      - 'settings.gradle'
+      - "apps/**"
+      - "build.gradle"
+      - "settings.gradle"
+      - ".github/workflows/build-push.yml"
+
 permissions:
   contents: read
   id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        service: [api-gateway, member-service, product-service, order-service, frontend]
+        service:
+          - api-gateway
+          - member-service
+          - product-service
+          - order-service
+          - frontend
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build and push
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
@@ -29,8 +47,14 @@ jobs:
           TAG: ${{ github.sha }}
         run: |
           if [ "$SERVICE" = "frontend" ]; then
-            docker build -t "$REGISTRY/$SERVICE:$TAG" apps/frontend
+            docker build \
+              -t "$REGISTRY/$SERVICE:$TAG" \
+              "apps/frontend"
           else
-            docker build -f "apps/$SERVICE/Dockerfile" -t "$REGISTRY/$SERVICE:$TAG" .
+            docker build \
+              -f "apps/$SERVICE/Dockerfile" \
+              -t "$REGISTRY/$SERVICE:$TAG" \
+              .
           fi
+
           docker push "$REGISTRY/$SERVICE:$TAG"
