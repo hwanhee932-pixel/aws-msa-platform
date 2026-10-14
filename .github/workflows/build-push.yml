@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         service:
           - api-gateway
@@ -28,29 +29,56 @@ jobs:
           - frontend
 
     steps:
+      # =====================================================
+      # 1. Source Checkout
+      # =====================================================
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug GitHub OIDC claims
-        uses: github/actions-oidc-debugger@main
-        with:
-          audience: sts.amazonaws.com
+      # =====================================================
+      # 2. GitHub Context 확인
+      # =====================================================
+      - name: Debug GitHub context
+        run: |
+          echo "repository=${{ github.repository }}"
+          echo "ref=${{ github.ref }}"
+          echo "event=${{ github.event_name }}"
+          echo "service=${{ matrix.service }}"
 
+      # =====================================================
+      # 3. AWS 인증 - GitHub OIDC
+      # =====================================================
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-${{ matrix.service }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # =====================================================
+      # 4. AWS 인증 확인
+      # =====================================================
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+      # =====================================================
+      # 5. Amazon ECR Login
+      # =====================================================
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      # =====================================================
+      # 6. Docker Build + ECR Push
+      # =====================================================
       - name: Build and push
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
           SERVICE: ${{ matrix.service }}
           TAG: ${{ github.sha }}
         run: |
+          echo "Building $SERVICE:$TAG"
+
           if [ "$SERVICE" = "frontend" ]; then
             docker build \
               -t "$REGISTRY/$SERVICE:$TAG" \
@@ -61,5 +89,7 @@ jobs:
               -t "$REGISTRY/$SERVICE:$TAG" \
               .
           fi
+
+          echo "Pushing $REGISTRY/$SERVICE:$TAG"
 
           docker push "$REGISTRY/$SERVICE:$TAG"
