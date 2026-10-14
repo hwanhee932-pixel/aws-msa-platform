@@ -1,0 +1,15 @@
+resources:
+  - ../../base
+namespace: msa
+# Pin production images to immutable Git SHA tags:
+images:
+  - name: YOUR_ECR_REGISTRY/api-gateway
+    newTag: REPLACE_ME
+  - name: YOUR_ECR_REGISTRY/member-service
+    newTag: REPLACE_ME
+  - name: YOUR_ECR_REGISTRY/product-service
+    newTag: REPLACE_ME
+  - name: YOUR_ECR_REGISTRY/order-service
+    newTag: REPLACE_ME
+  - name: YOUR_ECR_REGISTRY/frontend
+    newTag: REPLACE_ME

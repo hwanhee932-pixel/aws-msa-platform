@@ -1,0 +1,18 @@
+# Requires Prometheus Operator / kube-prometheus-stack.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: msa-services
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [msa]
+  selector:
+    matchExpressions:
+      - key: monitoring
+        operator: In
+        values: ["true"]
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 30s

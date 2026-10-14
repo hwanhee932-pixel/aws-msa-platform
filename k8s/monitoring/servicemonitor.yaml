@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: msa-services
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - msa
+
+  selector:
+    matchLabels:
+      monitoring: msa
+
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s

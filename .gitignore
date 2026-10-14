@@ -1,0 +1,68 @@
+# ============================================================
+# Secrets / Credentials
+# ============================================================
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Kubernetes local secret files
+secret.yaml
+secrets.yaml
+*secret-placeholder*
+*secret-value*
+
+# AWS credentials
+.aws/
+credentials
+.aws-sam/
+
+# ============================================================
+# Terraform
+# ============================================================
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+crash.*.log
+
+# Terraform variable files may contain secrets
+*.tfvars
+*.tfvars.json
+
+# Terraform plans
+*.tfplan
+tfplan
+
+# ============================================================
+# Java / Gradle
+# ============================================================
+.gradle/
+build/
+target/
+*.class
+*.jar
+
+# ============================================================
+# IDE
+# ============================================================
+.idea/
+.vscode/
+*.iml
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Logs / Temporary files
+# ============================================================
+*.log
+*.tmp
+*.temp
