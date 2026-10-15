@@ -1,26 +1,21 @@
-apiVersion: networking.k8s.io/v1
+﻿apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: public
   namespace: msa
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-northeast-2:088923313316:certificate/cfd2a39c-ed1d-44fc-bd61-db87cf6fe058"
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: "200-399"
 
 spec:
-  ingressClassName: nginx
-
-  tls:
-    - hosts:
-        - api.wecnedu.com
-        - www.wecnedu.com
-      secretName: msa-public-tls
+  ingressClassName: alb
 
   rules:
-    # =========================================================
-    # API Gateway
-    # api.wecnedu.com -> api-gateway:8080
-    # =========================================================
     - host: api.wecnedu.com
       http:
         paths:
@@ -32,10 +27,6 @@ spec:
                 port:
                   number: 8080
 
-    # =========================================================
-    # Frontend
-    # www.wecnedu.com -> frontend-service:80
-    # =========================================================
     - host: www.wecnedu.com
       http:
         paths:
