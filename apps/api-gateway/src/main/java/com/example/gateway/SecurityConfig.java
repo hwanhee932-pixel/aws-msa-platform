@@ -1,6 +1,8 @@
 package com.example.gateway;
 
 import java.util.Base64;
+import java.util.List;
+
 import javax.crypto.spec.SecretKeySpec;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +17,9 @@ import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
@@ -45,12 +50,52 @@ public class SecurityConfig {
         return decoder;
     }
 
+    // www.wecnedu.com -> api.wecnedu.com CORS 허용
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOrigins(List.of(
+            "https://www.wecnedu.com"
+        ));
+
+        config.setAllowedMethods(List.of(
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "OPTIONS"
+        ));
+
+        config.setAllowedHeaders(List.of(
+            "Authorization",
+            "Content-Type",
+            "Accept"
+        ));
+
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source =
+            new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/**", config);
+
+        return source;
+    }
+
     @Bean
     SecurityWebFilterChain securityWebFilterChain(
             ServerHttpSecurity http) {
 
         return http
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
+
+            // CORS 활성화
+            .cors(cors -> cors.configurationSource(
+                corsConfigurationSource()
+            ))
+
             .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
             .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
 
@@ -60,21 +105,25 @@ public class SecurityConfig {
 
             .authorizeExchange(auth -> auth
 
-                // 회원가입 / 로그인은 인증 없이 허용
+                // 브라우저 CORS Preflight 허용
+                .pathMatchers(HttpMethod.OPTIONS, "/**")
+                .permitAll()
+
+                // 회원가입 / 로그인
                 .pathMatchers(
                     HttpMethod.POST,
                     "/api/v1/auth/signup",
                     "/api/v1/auth/login"
                 ).permitAll()
 
-                // 상품 목록 / 상품 상세 조회는 인증 없이 허용
+                // 상품 목록 / 상세 조회
                 .pathMatchers(
                     HttpMethod.GET,
                     "/api/v1/products",
                     "/api/v1/products/**"
                 ).permitAll()
 
-                // Kubernetes Health Check 허용
+                // Kubernetes Health Check
                 .pathMatchers(
                     HttpMethod.GET,
                     "/actuator/health",
@@ -82,13 +131,12 @@ public class SecurityConfig {
                     "/actuator/health/readiness"
                 ).permitAll()
 
-                // 그 외 actuator 접근 차단
+                // 나머지 actuator 차단
                 .pathMatchers("/actuator/**").denyAll()
 
                 // 나머지 API는 JWT 인증 필요
                 .pathMatchers("/api/v1/**").authenticated()
 
-                // 그 외 모든 요청 차단
                 .anyExchange().denyAll()
             )
 
