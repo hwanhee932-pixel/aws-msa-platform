@@ -45,12 +45,24 @@ function App() {
   const [productPrice, setProductPrice] = useState("");
   const [productDescription, setProductDescription] = useState("");
 
-  // 상품 이미지
   const [productImage, setProductImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
 
   const [productMessage, setProductMessage] = useState("");
   const [productSubmitting, setProductSubmitting] = useState(false);
+
+  // =========================================================
+  // 주문
+  // =========================================================
+  const [orderProduct, setOrderProduct] = useState(null);
+  const [orderQuantity, setOrderQuantity] = useState(1);
+  const [orderMessage, setOrderMessage] = useState("");
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+
+  const [showOrders, setShowOrders] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersMessage, setOrdersMessage] = useState("");
 
   // =========================================================
   // 상품 조회
@@ -82,6 +94,17 @@ function App() {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  // =========================================================
+  // 이미지 Preview 정리
+  // =========================================================
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   // =========================================================
   // 상품 검색
@@ -230,7 +253,7 @@ function App() {
         data.accessToken
       );
 
-      // 이전 버전에서 localStorage에 저장했던 토큰 정리
+      // 이전 버전 토큰 제거
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
 
@@ -258,13 +281,35 @@ function App() {
   const handleLogout = () => {
     sessionStorage.removeItem("accessToken");
 
-    // 예전 토큰도 같이 정리
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+
+    setAccessToken("");
+
+    setShowProductForm(false);
+    setProductMessage("");
+
+    setShowOrders(false);
+    setOrders([]);
+    setOrdersMessage("");
+
+    setOrderProduct(null);
+    setOrderMessage("");
+  };
+
+  // =========================================================
+  // 인증 만료 처리
+  // =========================================================
+  const clearExpiredLogin = () => {
+    sessionStorage.removeItem("accessToken");
+
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
 
     setAccessToken("");
     setShowProductForm(false);
-    setProductMessage("");
+    setShowOrders(false);
+    setOrderProduct(null);
   };
 
   // =========================================================
@@ -288,20 +333,23 @@ function App() {
     if (!allowedTypes.includes(file.type)) {
       setProductImage(null);
       setImagePreview("");
+
       setProductMessage(
         "이미지는 JPG, PNG, WEBP 형식만 사용할 수 있습니다."
       );
+
       event.target.value = "";
       return;
     }
 
-    // 예시로 프론트에서 10MB 제한
     if (file.size > 10 * 1024 * 1024) {
       setProductImage(null);
       setImagePreview("");
+
       setProductMessage(
         "이미지 크기는 10MB 이하로 선택해주세요."
       );
+
       event.target.value = "";
       return;
     }
@@ -354,7 +402,7 @@ function App() {
       let imageKey = null;
 
       // =====================================================
-      // 1. 이미지가 있으면 Presigned PUT URL 요청
+      // 1. Presigned URL
       // =====================================================
       if (productImage) {
         const allowedTypes = [
@@ -391,10 +439,7 @@ function App() {
         );
 
         if (presignResponse.status === 401) {
-          sessionStorage.removeItem("accessToken");
-
-          setAccessToken("");
-          setShowProductForm(false);
+          clearExpiredLogin();
 
           setProductMessage(
             "로그인 시간이 만료되었습니다. 다시 로그인해주세요."
@@ -404,8 +449,7 @@ function App() {
         }
 
         if (!presignResponse.ok) {
-          const errorText =
-            await presignResponse.text();
+          const errorText = await presignResponse.text();
 
           console.error(
             "Presigned URL 발급 실패:",
@@ -420,8 +464,7 @@ function App() {
           return;
         }
 
-        const presignData =
-          await presignResponse.json();
+        const presignData = await presignResponse.json();
 
         if (
           !presignData.uploadUrl ||
@@ -441,7 +484,7 @@ function App() {
         }
 
         // ===================================================
-        // 2. 브라우저 → S3 직접 PUT
+        // 2. S3 PUT
         // ===================================================
         setProductMessage(
           "S3에 상품 이미지를 업로드하는 중..."
@@ -461,8 +504,7 @@ function App() {
         );
 
         if (!uploadResponse.ok) {
-          const errorText =
-            await uploadResponse.text();
+          const errorText = await uploadResponse.text();
 
           console.error(
             "S3 이미지 업로드 실패:",
@@ -481,7 +523,7 @@ function App() {
       }
 
       // =====================================================
-      // 3. Product DB에 상품 등록
+      // 3. 상품 DB 등록
       // =====================================================
       setProductMessage("상품 정보를 등록하는 중...");
 
@@ -498,18 +540,14 @@ function App() {
           body: JSON.stringify({
             name: productName.trim(),
             price: Number(productPrice),
-            description:
-              productDescription.trim(),
+            description: productDescription.trim(),
             imageKey,
           }),
         }
       );
 
       if (response.status === 401) {
-        sessionStorage.removeItem("accessToken");
-
-        setAccessToken("");
-        setShowProductForm(false);
+        clearExpiredLogin();
 
         setProductMessage(
           "로그인 시간이 만료되었습니다. 다시 로그인해주세요."
@@ -526,8 +564,7 @@ function App() {
       }
 
       if (!response.ok) {
-        const errorText =
-          await response.text();
+        const errorText = await response.text();
 
         console.error(
           "상품 등록 실패:",
@@ -544,9 +581,6 @@ function App() {
 
       const data = await response.json();
 
-      // =====================================================
-      // 4. 등록 성공
-      // =====================================================
       setProductMessage(
         `상품 등록 성공! 상품번호: ${data.id}`
       );
@@ -562,7 +596,6 @@ function App() {
 
       setImagePreview("");
 
-      // 상품 목록 다시 조회
       await loadProducts();
     } catch (err) {
       console.error(
@@ -579,13 +612,230 @@ function App() {
   };
 
   // =========================================================
+  // 주문 Modal
+  // =========================================================
+  const openOrderModal = (product) => {
+    if (!accessToken) {
+      setLoginMessage(
+        "주문하려면 먼저 로그인해주세요."
+      );
+      setAuthModal("login");
+      return;
+    }
+
+    setOrderProduct(product);
+    setOrderQuantity(1);
+    setOrderMessage("");
+  };
+
+  // =========================================================
+  // 주문 생성
+  // POST /api/v1/orders
+  // =========================================================
+  const handleCreateOrder = async (event) => {
+    event.preventDefault();
+
+    if (!accessToken) {
+      setOrderMessage("로그인이 필요합니다.");
+      return;
+    }
+
+    if (!orderProduct) {
+      setOrderMessage(
+        "주문할 상품을 선택해주세요."
+      );
+      return;
+    }
+
+    const quantity = Number(orderQuantity);
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      setOrderMessage(
+        "수량은 1개 이상 입력해주세요."
+      );
+      return;
+    }
+
+    setOrderSubmitting(true);
+    setOrderMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/v1/orders`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+
+          body: JSON.stringify({
+            productId: orderProduct.id,
+            quantity,
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        clearExpiredLogin();
+
+        setOrderMessage(
+          "로그인 시간이 만료되었습니다. 다시 로그인해주세요."
+        );
+
+        return;
+      }
+
+      if (response.status === 403) {
+        setOrderMessage(
+          "주문 권한이 없습니다."
+        );
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        console.error(
+          "주문 생성 실패:",
+          response.status,
+          errorText
+        );
+
+        setOrderMessage(
+          `주문 생성 실패 (${response.status})`
+        );
+
+        return;
+      }
+
+      const data = await response.json();
+
+      setOrderMessage(
+        `주문 완료! 주문번호 #${data.id}`
+      );
+
+      if (showOrders) {
+        await loadOrders();
+      }
+    } catch (err) {
+      console.error(
+        "주문 처리 중 오류:",
+        err
+      );
+
+      setOrderMessage(
+        "주문 처리 중 오류가 발생했습니다."
+      );
+    } finally {
+      setOrderSubmitting(false);
+    }
+  };
+
+  // =========================================================
+  // 내 주문 조회
+  // GET /api/v1/orders
+  // =========================================================
+  const loadOrders = async () => {
+    if (!accessToken) {
+      setOrders([]);
+      setOrdersMessage(
+        "로그인이 필요합니다."
+      );
+      return;
+    }
+
+    setOrdersLoading(true);
+    setOrdersMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/v1/orders`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        clearExpiredLogin();
+
+        setOrders([]);
+        setOrdersMessage(
+          "로그인 시간이 만료되었습니다. 다시 로그인해주세요."
+        );
+
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        console.error(
+          "주문 조회 실패:",
+          response.status,
+          errorText
+        );
+
+        setOrdersMessage(
+          `주문 조회 실패 (${response.status})`
+        );
+
+        return;
+      }
+
+      const data = await response.json();
+
+      setOrders(
+        Array.isArray(data) ? data : []
+      );
+    } catch (err) {
+      console.error(
+        "주문 조회 중 오류:",
+        err
+      );
+
+      setOrdersMessage(
+        "주문 내역을 불러오지 못했습니다."
+      );
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const handleOpenOrders = async () => {
+    if (!accessToken) {
+      setLoginMessage(
+        "주문 내역을 보려면 로그인해주세요."
+      );
+      setAuthModal("login");
+      return;
+    }
+
+    setShowOrders(true);
+
+    await loadOrders();
+
+    setTimeout(() => {
+      document
+        .getElementById("my-orders")
+        ?.scrollIntoView({
+          behavior: "smooth",
+        });
+    }, 50);
+  };
+
+  // =========================================================
   // 화면
   // =========================================================
   return (
     <>
-      {/* =========================================
-          HEADER
-      ========================================== */}
+      {/* HEADER */}
       <header className="top-header">
         <div className="header-inner">
           <button
@@ -631,6 +881,14 @@ function App() {
                 <button
                   className="header-button"
                   type="button"
+                  onClick={handleOpenOrders}
+                >
+                  내 주문
+                </button>
+
+                <button
+                  className="header-button"
+                  type="button"
                   onClick={handleLogout}
                 >
                   로그아웃
@@ -665,9 +923,7 @@ function App() {
         </div>
       </header>
 
-      {/* =========================================
-          SEARCH
-      ========================================== */}
+      {/* SEARCH */}
       <section className="search-area">
         <form
           className="search-inner"
@@ -692,96 +948,34 @@ function App() {
         </form>
       </section>
 
-      {/* =========================================
-          CATEGORY BAR
-      ========================================== */}
+      {/* CATEGORY BAR */}
       <section className="category-bar">
         <div className="category-inner">
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("")
-            }
-          >
-            전체상품
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("노트북")
-            }
-          >
-            노트북
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("모니터")
-            }
-          >
-            모니터
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("키보드")
-            }
-          >
-            키보드
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("마우스")
-            }
-          >
-            마우스
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("오디오")
-            }
-          >
-            오디오
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("SSD")
-            }
-          >
-            SSD / 메모리
-          </button>
-
-          <button
-            className="category-item"
-            type="button"
-            onClick={() =>
-              handleCategorySearch("게이밍")
-            }
-          >
-            게이밍
-          </button>
+          {[
+            ["", "전체상품"],
+            ["노트북", "노트북"],
+            ["모니터", "모니터"],
+            ["키보드", "키보드"],
+            ["마우스", "마우스"],
+            ["오디오", "오디오"],
+            ["SSD", "SSD / 메모리"],
+            ["게이밍", "게이밍"],
+          ].map(([keyword, label]) => (
+            <button
+              className="category-item"
+              type="button"
+              key={label}
+              onClick={() =>
+                handleCategorySearch(keyword)
+              }
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </section>
 
-      {/* =========================================
-          HERO
-      ========================================== */}
+      {/* HERO */}
       <section className="hero">
         <div className="hero-inner">
           <div className="hero-label">
@@ -817,9 +1011,6 @@ function App() {
         </div>
       </section>
 
-      {/* =========================================
-          MAIN
-      ========================================== */}
       <main className="container">
         {/* QUICK CATEGORIES */}
         <section
@@ -842,95 +1033,37 @@ function App() {
           </div>
 
           <div className="quick-categories">
-            <button
-              className="quick-category"
-              type="button"
-              onClick={() =>
-                handleCategorySearch("노트북")
-              }
-            >
-              <span className="category-icon">
-                💻
-              </span>
-              <strong>노트북</strong>
-              <small>Laptop & Tablet</small>
-            </button>
+            {[
+              ["노트북", "💻", "노트북", "Laptop & Tablet"],
+              ["모니터", "🖥️", "모니터", "Monitor & Display"],
+              ["키보드", "⌨️", "키보드", "Keyboard"],
+              ["마우스", "🖱️", "마우스", "Mouse"],
+              ["오디오", "🎧", "오디오", "Headset & Audio"],
+              ["SSD", "💾", "PC부품", "SSD & Memory"],
+            ].map(
+              ([keyword, icon, title, subtitle]) => (
+                <button
+                  className="quick-category"
+                  type="button"
+                  key={title}
+                  onClick={() =>
+                    handleCategorySearch(keyword)
+                  }
+                >
+                  <span className="category-icon">
+                    {icon}
+                  </span>
 
-            <button
-              className="quick-category"
-              type="button"
-              onClick={() =>
-                handleCategorySearch("모니터")
-              }
-            >
-              <span className="category-icon">
-                🖥️
-              </span>
-              <strong>모니터</strong>
-              <small>Monitor & Display</small>
-            </button>
+                  <strong>{title}</strong>
 
-            <button
-              className="quick-category"
-              type="button"
-              onClick={() =>
-                handleCategorySearch("키보드")
-              }
-            >
-              <span className="category-icon">
-                ⌨️
-              </span>
-              <strong>키보드</strong>
-              <small>Keyboard</small>
-            </button>
-
-            <button
-              className="quick-category"
-              type="button"
-              onClick={() =>
-                handleCategorySearch("마우스")
-              }
-            >
-              <span className="category-icon">
-                🖱️
-              </span>
-              <strong>마우스</strong>
-              <small>Mouse</small>
-            </button>
-
-            <button
-              className="quick-category"
-              type="button"
-              onClick={() =>
-                handleCategorySearch("오디오")
-              }
-            >
-              <span className="category-icon">
-                🎧
-              </span>
-              <strong>오디오</strong>
-              <small>Headset & Audio</small>
-            </button>
-
-            <button
-              className="quick-category"
-              type="button"
-              onClick={() =>
-                handleCategorySearch("SSD")
-              }
-            >
-              <span className="category-icon">
-                💾
-              </span>
-              <strong>PC부품</strong>
-              <small>SSD & Memory</small>
-            </button>
+                  <small>{subtitle}</small>
+                </button>
+              )
+            )}
           </div>
         </section>
 
-        {/* =====================================
-            PRODUCT CREATE
-        ====================================== */}
+        {/* PRODUCT CREATE */}
         {accessToken && showProductForm && (
           <section className="admin-panel">
             <div className="section-header">
@@ -1002,7 +1135,6 @@ function App() {
                 />
               </div>
 
-              {/* 이미지 업로드 */}
               <div className="image-upload-area">
                 <label>상품 이미지</label>
 
@@ -1060,9 +1192,7 @@ function App() {
           </section>
         )}
 
-        {/* =====================================
-            PRODUCTS
-        ====================================== */}
+        {/* PRODUCTS */}
         <section
           id="products"
           className="products-section"
@@ -1134,6 +1264,7 @@ function App() {
                       ) : (
                         <div className="no-image">
                           <span>💻</span>
+
                           <small>
                             IMAGE COMING SOON
                           </small>
@@ -1167,6 +1298,16 @@ function App() {
                       <div className="product-meta">
                         상품번호 #{product.id}
                       </div>
+
+                      <button
+                        className="order-button"
+                        type="button"
+                        onClick={() =>
+                          openOrderModal(product)
+                        }
+                      >
+                        주문하기
+                      </button>
                     </div>
                   </article>
                 )
@@ -1174,11 +1315,130 @@ function App() {
             </div>
           )}
         </section>
+
+        {/* MY ORDERS */}
+        {accessToken && showOrders && (
+          <section
+            id="my-orders"
+            className="orders-section"
+          >
+            <div className="section-header">
+              <div>
+                <span className="section-label">
+                  MY ORDERS
+                </span>
+
+                <h2>내 주문</h2>
+
+                <p>
+                  로그인한 계정의 주문 내역입니다.
+                </p>
+              </div>
+
+              <button
+                className="outline-button"
+                type="button"
+                onClick={() =>
+                  setShowOrders(false)
+                }
+              >
+                닫기
+              </button>
+            </div>
+
+            {ordersLoading ? (
+              <div className="product-state">
+                주문 내역을 불러오는 중...
+              </div>
+            ) : ordersMessage ? (
+              <div className="product-state error">
+                {ordersMessage}
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="product-state">
+                아직 주문 내역이 없습니다.
+              </div>
+            ) : (
+              <div className="orders-grid">
+                {orders.map((order) => {
+                  const product =
+                    products.find(
+                      (item) =>
+                        item.id ===
+                        order.productId
+                    );
+
+                  return (
+                    <article
+                      className="order-card"
+                      key={order.id}
+                    >
+                      <div className="order-number">
+                        ORDER #{order.id}
+                      </div>
+
+                      <h3>
+                        {product?.name ||
+                          `상품 #${order.productId}`}
+                      </h3>
+
+                      <div className="order-detail">
+                        <span>상품번호</span>
+
+                        <strong>
+                          #{order.productId}
+                        </strong>
+                      </div>
+
+                      <div className="order-detail">
+                        <span>수량</span>
+
+                        <strong>
+                          {order.quantity}개
+                        </strong>
+                      </div>
+
+                      {product && (
+                        <div className="order-detail">
+                          <span>
+                            주문 금액
+                          </span>
+
+                          <strong>
+                            {(
+                              Number(
+                                product.price
+                              ) *
+                              Number(
+                                order.quantity
+                              )
+                            ).toLocaleString(
+                              "ko-KR"
+                            )}
+                            원
+                          </strong>
+                        </div>
+                      )}
+
+                      <div className="order-date">
+                        {order.createdAt
+                          ? new Date(
+                              order.createdAt
+                            ).toLocaleString(
+                              "ko-KR"
+                            )
+                          : ""}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
-      {/* =========================================
-          FOOTER
-      ========================================== */}
+      {/* FOOTER */}
       <footer className="footer">
         <div className="footer-inner">
           <div>
@@ -1186,9 +1446,7 @@ function App() {
               SOL_SHOP
             </div>
 
-            <p>
-              IT & Gaming Store
-            </p>
+            <p>IT & Gaming Store</p>
           </div>
 
           <div className="footer-info">
@@ -1197,16 +1455,139 @@ function App() {
             </p>
 
             <small>
-              © 2026 Sol_Shop. All rights
-              reserved.
+              © 2026 Sol_Shop. All rights reserved.
             </small>
           </div>
         </div>
       </footer>
 
-      {/* =========================================
-          LOGIN MODAL
-      ========================================== */}
+      {/* ORDER MODAL */}
+      {orderProduct && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+                event.currentTarget &&
+              !orderSubmitting
+            ) {
+              setOrderProduct(null);
+              setOrderMessage("");
+            }
+          }}
+        >
+          <div className="modal order-modal">
+            <button
+              className="modal-close"
+              type="button"
+              disabled={orderSubmitting}
+              onClick={() => {
+                setOrderProduct(null);
+                setOrderMessage("");
+              }}
+            >
+              ×
+            </button>
+
+            <div className="modal-brand">
+              SOL_<span>SHOP</span>
+            </div>
+
+            <h2>상품 주문</h2>
+
+            <p className="modal-description">
+              주문할 상품과 수량을 확인해주세요.
+            </p>
+
+            <div className="order-product-summary">
+              {orderProduct.imageUrl ? (
+                <img
+                  src={orderProduct.imageUrl}
+                  alt={orderProduct.name}
+                />
+              ) : (
+                <div className="order-placeholder">
+                  💻
+                </div>
+              )}
+
+              <div>
+                <strong>
+                  {orderProduct.name}
+                </strong>
+
+                <span>
+                  {Number(
+                    orderProduct.price
+                  ).toLocaleString("ko-KR")}
+                  원
+                </span>
+              </div>
+            </div>
+
+            <form
+              className="auth-form"
+              onSubmit={handleCreateOrder}
+            >
+              <label>
+                수량
+
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={orderQuantity}
+                  onChange={(event) =>
+                    setOrderQuantity(
+                      event.target.value
+                    )
+                  }
+                  required
+                />
+              </label>
+
+              <div className="order-total">
+                <span>총 주문금액</span>
+
+                <strong>
+                  {(
+                    Number(
+                      orderProduct.price
+                    ) *
+                    Math.max(
+                      1,
+                      Number(
+                        orderQuantity
+                      ) || 1
+                    )
+                  ).toLocaleString(
+                    "ko-KR"
+                  )}
+                  원
+                </strong>
+              </div>
+
+              <button
+                className="primary-button modal-submit"
+                type="submit"
+                disabled={orderSubmitting}
+              >
+                {orderSubmitting
+                  ? "주문 처리 중..."
+                  : "주문 확정"}
+              </button>
+            </form>
+
+            {orderMessage && (
+              <p className="auth-message">
+                {orderMessage}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LOGIN MODAL */}
       {authModal === "login" && (
         <div
           className="modal-backdrop"
@@ -1308,9 +1689,7 @@ function App() {
         </div>
       )}
 
-      {/* =========================================
-          SIGNUP MODAL
-      ========================================== */}
+      {/* SIGNUP MODAL */}
       {authModal === "signup" && (
         <div
           className="modal-backdrop"
