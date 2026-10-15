@@ -43,10 +43,14 @@ function App() {
 
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
-  const [productDescription, setProductDescription] =
-    useState("");
+  const [productDescription, setProductDescription] = useState("");
+
+  // 상품 이미지
+  const [productImage, setProductImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
 
   const [productMessage, setProductMessage] = useState("");
+  const [productSubmitting, setProductSubmitting] = useState(false);
 
   // =========================================================
   // 상품 조회
@@ -69,10 +73,7 @@ function App() {
       setProducts(data.content ?? []);
     } catch (err) {
       console.error(err);
-
-      setProductError(
-        "상품 정보를 불러오지 못했습니다."
-      );
+      setProductError("상품 정보를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -83,23 +84,18 @@ function App() {
   }, []);
 
   // =========================================================
-  // 검색
+  // 상품 검색
   // =========================================================
   const filteredProducts = useMemo(() => {
-    const keyword = searchKeyword
-      .trim()
-      .toLowerCase();
+    const keyword = searchKeyword.trim().toLowerCase();
 
     if (!keyword) {
       return products;
     }
 
     return products.filter((product) => {
-      const name =
-        product.name?.toLowerCase() || "";
-
-      const description =
-        product.description?.toLowerCase() || "";
+      const name = product.name?.toLowerCase() || "";
+      const description = product.description?.toLowerCase() || "";
 
       return (
         name.includes(keyword) ||
@@ -113,16 +109,27 @@ function App() {
 
     setSearchKeyword(searchInput);
 
-    document
-      .getElementById("products")
-      ?.scrollIntoView({
-        behavior: "smooth",
-      });
+    document.getElementById("products")?.scrollIntoView({
+      behavior: "smooth",
+    });
   };
 
   const clearSearch = () => {
     setSearchInput("");
     setSearchKeyword("");
+  };
+
+  const handleCategorySearch = (keyword) => {
+    if (!keyword) {
+      clearSearch();
+    } else {
+      setSearchInput(keyword);
+      setSearchKeyword(keyword);
+    }
+
+    document.getElementById("products")?.scrollIntoView({
+      behavior: "smooth",
+    });
   };
 
   // =========================================================
@@ -151,21 +158,15 @@ function App() {
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (response.status === 409) {
-        setSignupMessage(
-          "이미 가입된 이메일입니다."
-        );
-
+        setSignupMessage("이미 가입된 이메일입니다.");
         return;
       }
 
       if (!response.ok) {
-        setSignupMessage(
-          `회원가입 실패 (${response.status})`
-        );
-
+        setSignupMessage(`회원가입 실패 (${response.status})`);
         return;
       }
 
@@ -210,21 +211,17 @@ function App() {
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (response.status === 401) {
         setLoginMessage(
           "이메일 또는 비밀번호가 올바르지 않습니다."
         );
-
         return;
       }
 
       if (!response.ok) {
-        setLoginMessage(
-          `로그인 실패 (${response.status})`
-        );
-
+        setLoginMessage(`로그인 실패 (${response.status})`);
         return;
       }
 
@@ -233,21 +230,19 @@ function App() {
         data.accessToken
       );
 
-      // 예전 버전에서 저장한 토큰 정리
+      // 이전 버전에서 localStorage에 저장했던 토큰 정리
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
 
       setAccessToken(data.accessToken);
 
-      setLoginMessage("로그인 성공");
-
+      setLoginMessage("로그인 성공!");
       setLoginPassword("");
 
-      // 잠깐 메시지를 보여준 뒤 모달 닫기
       setTimeout(() => {
         setAuthModal(null);
         setLoginMessage("");
-      }, 600);
+      }, 700);
     } catch (err) {
       console.error(err);
 
@@ -263,17 +258,68 @@ function App() {
   const handleLogout = () => {
     sessionStorage.removeItem("accessToken");
 
+    // 예전 토큰도 같이 정리
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
 
     setAccessToken("");
     setShowProductForm(false);
     setProductMessage("");
-    setLoginMessage("");
+  };
+
+  // =========================================================
+  // 상품 이미지 선택
+  // =========================================================
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setProductImage(null);
+      setImagePreview("");
+      return;
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      setProductImage(null);
+      setImagePreview("");
+      setProductMessage(
+        "이미지는 JPG, PNG, WEBP 형식만 사용할 수 있습니다."
+      );
+      event.target.value = "";
+      return;
+    }
+
+    // 예시로 프론트에서 10MB 제한
+    if (file.size > 10 * 1024 * 1024) {
+      setProductImage(null);
+      setImagePreview("");
+      setProductMessage(
+        "이미지 크기는 10MB 이하로 선택해주세요."
+      );
+      event.target.value = "";
+      return;
+    }
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    setProductImage(file);
+    setImagePreview(previewUrl);
+    setProductMessage("");
   };
 
   // =========================================================
   // 상품 등록
+  // Presigned URL → S3 PUT → Product API
   // =========================================================
   const handleCreateProduct = async (event) => {
     event.preventDefault();
@@ -284,11 +330,161 @@ function App() {
       setProductMessage(
         "상품을 등록하려면 로그인이 필요합니다."
       );
-
       return;
     }
 
+    if (!productName.trim()) {
+      setProductMessage("상품명을 입력해주세요.");
+      return;
+    }
+
+    if (
+      productPrice === "" ||
+      Number(productPrice) < 0
+    ) {
+      setProductMessage(
+        "올바른 상품 가격을 입력해주세요."
+      );
+      return;
+    }
+
+    setProductSubmitting(true);
+
     try {
+      let imageKey = null;
+
+      // =====================================================
+      // 1. 이미지가 있으면 Presigned PUT URL 요청
+      // =====================================================
+      if (productImage) {
+        const allowedTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+        ];
+
+        if (!allowedTypes.includes(productImage.type)) {
+          setProductMessage(
+            "이미지는 JPG, PNG, WEBP 형식만 사용할 수 있습니다."
+          );
+          return;
+        }
+
+        setProductMessage(
+          "이미지 업로드 URL을 발급받는 중..."
+        );
+
+        const presignResponse = await fetch(
+          `${API_URL}/v1/products/images/presigned-url`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+
+            body: JSON.stringify({
+              contentType: productImage.type,
+            }),
+          }
+        );
+
+        if (presignResponse.status === 401) {
+          sessionStorage.removeItem("accessToken");
+
+          setAccessToken("");
+          setShowProductForm(false);
+
+          setProductMessage(
+            "로그인 시간이 만료되었습니다. 다시 로그인해주세요."
+          );
+
+          return;
+        }
+
+        if (!presignResponse.ok) {
+          const errorText =
+            await presignResponse.text();
+
+          console.error(
+            "Presigned URL 발급 실패:",
+            presignResponse.status,
+            errorText
+          );
+
+          setProductMessage(
+            `이미지 업로드 URL 발급 실패 (${presignResponse.status})`
+          );
+
+          return;
+        }
+
+        const presignData =
+          await presignResponse.json();
+
+        if (
+          !presignData.uploadUrl ||
+          !presignData.key ||
+          !presignData.contentType
+        ) {
+          console.error(
+            "잘못된 Presigned URL 응답:",
+            presignData
+          );
+
+          setProductMessage(
+            "이미지 업로드 URL 응답 형식이 올바르지 않습니다."
+          );
+
+          return;
+        }
+
+        // ===================================================
+        // 2. 브라우저 → S3 직접 PUT
+        // ===================================================
+        setProductMessage(
+          "S3에 상품 이미지를 업로드하는 중..."
+        );
+
+        const uploadResponse = await fetch(
+          presignData.uploadUrl,
+          {
+            method: "PUT",
+
+            headers: {
+              "Content-Type": presignData.contentType,
+            },
+
+            body: productImage,
+          }
+        );
+
+        if (!uploadResponse.ok) {
+          const errorText =
+            await uploadResponse.text();
+
+          console.error(
+            "S3 이미지 업로드 실패:",
+            uploadResponse.status,
+            errorText
+          );
+
+          setProductMessage(
+            `S3 이미지 업로드 실패 (${uploadResponse.status})`
+          );
+
+          return;
+        }
+
+        imageKey = presignData.key;
+      }
+
+      // =====================================================
+      // 3. Product DB에 상품 등록
+      // =====================================================
+      setProductMessage("상품 정보를 등록하는 중...");
+
       const response = await fetch(
         `${API_URL}/v1/products`,
         {
@@ -300,10 +496,11 @@ function App() {
           },
 
           body: JSON.stringify({
-            name: productName,
+            name: productName.trim(),
             price: Number(productPrice),
-            description: productDescription,
-            imageKey: null,
+            description:
+              productDescription.trim(),
+            imageKey,
           }),
         }
       );
@@ -325,7 +522,6 @@ function App() {
         setProductMessage(
           "상품 등록 권한이 없습니다."
         );
-
         return;
       }
 
@@ -348,6 +544,9 @@ function App() {
 
       const data = await response.json();
 
+      // =====================================================
+      // 4. 등록 성공
+      // =====================================================
       setProductMessage(
         `상품 등록 성공! 상품번호: ${data.id}`
       );
@@ -355,19 +554,32 @@ function App() {
       setProductName("");
       setProductPrice("");
       setProductDescription("");
+      setProductImage(null);
 
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
+      setImagePreview("");
+
+      // 상품 목록 다시 조회
       await loadProducts();
     } catch (err) {
-      console.error(err);
+      console.error(
+        "상품 등록 처리 중 오류:",
+        err
+      );
 
       setProductMessage(
-        "상품 등록 요청 중 오류가 발생했습니다."
+        "상품 등록 중 오류가 발생했습니다."
       );
+    } finally {
+      setProductSubmitting(false);
     }
   };
 
   // =========================================================
-  // UI
+  // 화면
   // =========================================================
   return (
     <>
@@ -376,8 +588,9 @@ function App() {
       ========================================== */}
       <header className="top-header">
         <div className="header-inner">
-          <div
+          <button
             className="logo"
+            type="button"
             onClick={() =>
               window.scrollTo({
                 top: 0,
@@ -386,32 +599,15 @@ function App() {
             }
           >
             SOL_<span>SHOP</span>
-          </div>
+          </button>
 
           <nav className="main-nav">
-            <a href="#products">
-              신상품
-            </a>
-
-            <a href="#products">
-              베스트
-            </a>
-
-            <a href="#categories">
-              노트북
-            </a>
-
-            <a href="#categories">
-              모니터
-            </a>
-
-            <a href="#categories">
-              PC부품
-            </a>
-
-            <a href="#categories">
-              게이밍
-            </a>
+            <a href="#products">신상품</a>
+            <a href="#products">베스트</a>
+            <a href="#categories">노트북</a>
+            <a href="#categories">모니터</a>
+            <a href="#categories">PC부품</a>
+            <a href="#categories">게이밍</a>
           </nav>
 
           <div className="header-actions">
@@ -420,13 +616,16 @@ function App() {
                 <button
                   className="header-button"
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    setProductMessage("");
                     setShowProductForm(
                       (prev) => !prev
-                    )
-                  }
+                    );
+                  }}
                 >
-                  상품 등록
+                  {showProductForm
+                    ? "등록창 닫기"
+                    : "상품 등록"}
                 </button>
 
                 <button
@@ -494,39 +693,87 @@ function App() {
       </section>
 
       {/* =========================================
-          CATEGORY NAV
+          CATEGORY BAR
       ========================================== */}
       <section className="category-bar">
         <div className="category-inner">
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("")
+            }
+          >
             전체상품
           </button>
 
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("노트북")
+            }
+          >
             노트북
           </button>
 
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("모니터")
+            }
+          >
             모니터
           </button>
 
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("키보드")
+            }
+          >
             키보드
           </button>
 
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("마우스")
+            }
+          >
             마우스
           </button>
 
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("오디오")
+            }
+          >
             오디오
           </button>
 
-          <button className="category-item">
-            PC부품
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("SSD")
+            }
+          >
+            SSD / 메모리
           </button>
 
-          <button className="category-item">
+          <button
+            className="category-item"
+            type="button"
+            onClick={() =>
+              handleCategorySearch("게이밍")
+            }
+          >
             게이밍
           </button>
         </div>
@@ -574,10 +821,17 @@ function App() {
           MAIN
       ========================================== */}
       <main className="container">
-        {/* QUICK CATEGORY */}
-        <section id="categories">
+        {/* QUICK CATEGORIES */}
+        <section
+          id="categories"
+          className="categories-section"
+        >
           <div className="section-header">
             <div>
+              <span className="section-label">
+                CATEGORY
+              </span>
+
               <h2>Shop by Category</h2>
 
               <p>
@@ -588,52 +842,88 @@ function App() {
           </div>
 
           <div className="quick-categories">
-            <button className="quick-category">
+            <button
+              className="quick-category"
+              type="button"
+              onClick={() =>
+                handleCategorySearch("노트북")
+              }
+            >
               <span className="category-icon">
                 💻
               </span>
-
               <strong>노트북</strong>
+              <small>Laptop & Tablet</small>
             </button>
 
-            <button className="quick-category">
+            <button
+              className="quick-category"
+              type="button"
+              onClick={() =>
+                handleCategorySearch("모니터")
+              }
+            >
               <span className="category-icon">
                 🖥️
               </span>
-
               <strong>모니터</strong>
+              <small>Monitor & Display</small>
             </button>
 
-            <button className="quick-category">
+            <button
+              className="quick-category"
+              type="button"
+              onClick={() =>
+                handleCategorySearch("키보드")
+              }
+            >
               <span className="category-icon">
                 ⌨️
               </span>
-
               <strong>키보드</strong>
+              <small>Keyboard</small>
             </button>
 
-            <button className="quick-category">
+            <button
+              className="quick-category"
+              type="button"
+              onClick={() =>
+                handleCategorySearch("마우스")
+              }
+            >
               <span className="category-icon">
                 🖱️
               </span>
-
               <strong>마우스</strong>
+              <small>Mouse</small>
             </button>
 
-            <button className="quick-category">
+            <button
+              className="quick-category"
+              type="button"
+              onClick={() =>
+                handleCategorySearch("오디오")
+              }
+            >
               <span className="category-icon">
                 🎧
               </span>
-
               <strong>오디오</strong>
+              <small>Headset & Audio</small>
             </button>
 
-            <button className="quick-category">
+            <button
+              className="quick-category"
+              type="button"
+              onClick={() =>
+                handleCategorySearch("SSD")
+              }
+            >
               <span className="category-icon">
                 💾
               </span>
-
               <strong>PC부품</strong>
+              <small>SSD & Memory</small>
             </button>
           </div>
         </section>
@@ -645,6 +935,10 @@ function App() {
           <section className="admin-panel">
             <div className="section-header">
               <div>
+                <span className="section-label">
+                  SELLER
+                </span>
+
                 <h2>상품 등록</h2>
 
                 <p>
@@ -658,56 +952,110 @@ function App() {
               className="product-form"
               onSubmit={handleCreateProduct}
             >
-              <input
-                type="text"
-                placeholder="상품명"
-                value={productName}
-                onChange={(event) =>
-                  setProductName(
-                    event.target.value
-                  )
-                }
-                maxLength={255}
-                required
-              />
+              <div className="form-group">
+                <label>상품명</label>
 
-              <input
-                type="number"
-                placeholder="가격"
-                value={productPrice}
-                onChange={(event) =>
-                  setProductPrice(
-                    event.target.value
-                  )
-                }
-                min="0"
-                step="0.01"
-                required
-              />
+                <input
+                  type="text"
+                  placeholder="예: 게이밍 기계식 키보드"
+                  value={productName}
+                  onChange={(event) =>
+                    setProductName(
+                      event.target.value
+                    )
+                  }
+                  maxLength={255}
+                  required
+                />
+              </div>
 
-              <textarea
-                placeholder="상품 설명"
-                value={productDescription}
-                onChange={(event) =>
-                  setProductDescription(
-                    event.target.value
-                  )
-                }
-                maxLength={2000}
-              />
+              <div className="form-group">
+                <label>가격</label>
+
+                <input
+                  type="number"
+                  placeholder="예: 89000"
+                  value={productPrice}
+                  onChange={(event) =>
+                    setProductPrice(
+                      event.target.value
+                    )
+                  }
+                  min="0"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>상품 설명</label>
+
+                <textarea
+                  placeholder="상품의 특징과 사양을 입력해주세요."
+                  value={productDescription}
+                  onChange={(event) =>
+                    setProductDescription(
+                      event.target.value
+                    )
+                  }
+                  maxLength={2000}
+                />
+              </div>
+
+              {/* 이미지 업로드 */}
+              <div className="image-upload-area">
+                <label>상품 이미지</label>
+
+                <p className="image-help">
+                  JPG, PNG, WEBP · 최대 10MB
+                </p>
+
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleImageChange}
+                />
+
+                {imagePreview && (
+                  <div className="image-preview">
+                    <img
+                      src={imagePreview}
+                      alt="상품 이미지 미리보기"
+                    />
+
+                    <button
+                      type="button"
+                      className="remove-image-button"
+                      onClick={() => {
+                        URL.revokeObjectURL(
+                          imagePreview
+                        );
+
+                        setImagePreview("");
+                        setProductImage(null);
+                      }}
+                    >
+                      이미지 제거
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <button
-                className="primary-button"
+                className="primary-button product-submit-button"
                 type="submit"
+                disabled={productSubmitting}
               >
-                상품 등록
+                {productSubmitting
+                  ? "등록 중..."
+                  : "상품 등록"}
               </button>
             </form>
 
             {productMessage && (
-              <p className="auth-message">
+              <div className="status-message">
                 {productMessage}
-              </p>
+              </div>
             )}
           </section>
         )}
@@ -715,9 +1063,16 @@ function App() {
         {/* =====================================
             PRODUCTS
         ====================================== */}
-        <section id="products">
-          <div className="section-header">
+        <section
+          id="products"
+          className="products-section"
+        >
+          <div className="section-header product-section-header">
             <div>
+              <span className="section-label">
+                PRODUCTS
+              </span>
+
               <h2>
                 {searchKeyword
                   ? "검색 결과"
@@ -733,31 +1088,29 @@ function App() {
 
             {searchKeyword && (
               <button
-                className="header-button"
+                className="outline-button"
                 type="button"
-                style={{
-                  color: "#111827",
-                  borderColor: "#d1d5db",
-                }}
                 onClick={clearSearch}
               >
-                검색 초기화
+                전체상품 보기
               </button>
             )}
           </div>
 
           {loading ? (
-            <p>
+            <div className="product-state">
               상품을 불러오는 중...
-            </p>
+            </div>
           ) : productError ? (
-            <p>{productError}</p>
+            <div className="product-state error">
+              {productError}
+            </div>
           ) : filteredProducts.length === 0 ? (
-            <p>
+            <div className="product-state">
               {searchKeyword
                 ? "검색 결과가 없습니다."
                 : "등록된 상품이 없습니다."}
-            </p>
+            </div>
           ) : (
             <div className="product-grid">
               {filteredProducts.map(
@@ -776,15 +1129,23 @@ function App() {
                           className="product-image"
                           src={product.imageUrl}
                           alt={product.name}
+                          loading="lazy"
                         />
                       ) : (
                         <div className="no-image">
-                          IT PRODUCT
+                          <span>💻</span>
+                          <small>
+                            IMAGE COMING SOON
+                          </small>
                         </div>
                       )}
                     </div>
 
                     <div className="product-info">
+                      <div className="product-category">
+                        SOL_SHOP TECH
+                      </div>
+
                       <h3>
                         {product.name}
                       </h3>
@@ -803,9 +1164,9 @@ function App() {
                           "상품 설명이 없습니다."}
                       </p>
 
-                      <small>
+                      <div className="product-meta">
                         상품번호 #{product.id}
-                      </small>
+                      </div>
                     </div>
                   </article>
                 )
@@ -820,21 +1181,26 @@ function App() {
       ========================================== */}
       <footer className="footer">
         <div className="footer-inner">
-          <div className="footer-logo">
-            SOL_SHOP
+          <div>
+            <div className="footer-logo">
+              SOL_SHOP
+            </div>
+
+            <p>
+              IT & Gaming Store
+            </p>
           </div>
 
-          <p>
-            IT & Gaming Store
-          </p>
+          <div className="footer-info">
+            <p>
+              AWS 기반 MSA IT 쇼핑 플랫폼
+            </p>
 
-          <p>
-            AWS 기반 MSA IT 쇼핑 플랫폼
-          </p>
-
-          <small>
-            © 2026 Sol_Shop. All rights reserved.
-          </small>
+            <small>
+              © 2026 Sol_Shop. All rights
+              reserved.
+            </small>
+          </div>
         </div>
       </footer>
 
@@ -864,11 +1230,15 @@ function App() {
               ×
             </button>
 
-            <h2>Sol_Shop 로그인</h2>
+            <div className="modal-brand">
+              SOL_<span>SHOP</span>
+            </div>
 
-            <p>
-              로그인하고 상품 등록 및 주문
-              서비스를 이용해보세요.
+            <h2>로그인</h2>
+
+            <p className="modal-description">
+              로그인하고 Sol_Shop 서비스를
+              이용해보세요.
             </p>
 
             <form
@@ -908,7 +1278,7 @@ function App() {
               </label>
 
               <button
-                className="primary-button"
+                className="primary-button modal-submit"
                 type="submit"
               >
                 로그인
@@ -921,19 +1291,14 @@ function App() {
               </p>
             )}
 
-            <p>
-              아직 회원이 아니신가요?{" "}
+            <p className="modal-switch">
+              아직 회원이 아니신가요?
+
               <button
                 type="button"
                 onClick={() => {
                   setLoginMessage("");
                   setAuthModal("signup");
-                }}
-                style={{
-                  border: 0,
-                  background: "transparent",
-                  color: "#2563eb",
-                  fontWeight: 700,
                 }}
               >
                 회원가입
@@ -969,11 +1334,15 @@ function App() {
               ×
             </button>
 
-            <h2>Sol_Shop 회원가입</h2>
+            <div className="modal-brand">
+              SOL_<span>SHOP</span>
+            </div>
 
-            <p>
+            <h2>회원가입</h2>
+
+            <p className="modal-description">
               계정을 만들고 Sol_Shop을
-              이용해보세요.
+              시작해보세요.
             </p>
 
             <form
@@ -1031,7 +1400,7 @@ function App() {
               </label>
 
               <button
-                className="primary-button"
+                className="primary-button modal-submit"
                 type="submit"
               >
                 회원가입
@@ -1044,19 +1413,14 @@ function App() {
               </p>
             )}
 
-            <p>
-              이미 회원이신가요?{" "}
+            <p className="modal-switch">
+              이미 회원이신가요?
+
               <button
                 type="button"
                 onClick={() => {
                   setSignupMessage("");
                   setAuthModal("login");
-                }}
-                style={{
-                  border: 0,
-                  background: "transparent",
-                  color: "#2563eb",
-                  fontWeight: 700,
                 }}
               >
                 로그인
