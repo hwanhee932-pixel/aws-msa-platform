@@ -1,8 +1,9 @@
 package com.example.order;
 
-import java.util.Base64;
+import java.nio.charset.StandardCharsets;
+
+import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import jakarta.servlet.DispatcherType;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -11,65 +12,41 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 public class SecurityConfig {
 
-    /*
-     * Member Service가 발급한 JWT와
-     * 동일한 JWT_SECRET + HS512 방식으로 검증
-     */
+    @Value("${app.jwt.secret}")
+    private String jwtSecret;
+
     @Bean
-    JwtDecoder jwtDecoder(
-            @Value("${app.jwt.secret}") String secret) {
+    public JwtDecoder jwtDecoder() {
 
-        byte[] bytes = Base64.getDecoder().decode(secret);
-
-        if (bytes.length < 64) {
-            throw new IllegalArgumentException(
-                "JWT_SECRET must contain at least 64 decoded bytes"
-            );
-        }
-
-        var key = new SecretKeySpec(bytes, "HmacSHA512");
-
-        var decoder = NimbusJwtDecoder
-            .withSecretKey(key)
-            .macAlgorithm(MacAlgorithm.HS512)
-            .build();
-
-        decoder.setJwtValidator(
-            JwtValidators.createDefault()
+        SecretKey key = new SecretKeySpec(
+            jwtSecret.getBytes(StandardCharsets.UTF_8),
+            "HmacSHA512"
         );
 
-        return decoder;
+        return NimbusJwtDecoder
+            .withSecretKey(key)
+            .macAlgorithm(
+                org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS512
+            )
+            .build();
     }
 
-
-    /*
-     * Order Service 보안 설정
-     */
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+        throws Exception {
 
-        return http
-
-            // REST API이므로 CSRF 사용 안 함
+        http
             .csrf(csrf -> csrf.disable())
 
-            // Basic 인증 사용 안 함
-            .httpBasic(basic -> basic.disable())
+            .cors(Customizer.withDefaults())
 
-            // Form Login 사용 안 함
-            .formLogin(form -> form.disable())
-
-            // JWT 기반 Stateless
             .sessionManagement(session ->
                 session.sessionCreationPolicy(
                     SessionCreationPolicy.STATELESS
@@ -77,11 +54,6 @@ public class SecurityConfig {
             )
 
             .authorizeHttpRequests(auth -> auth
-
-                // Spring 내부 ERROR dispatch 허용
-                .dispatcherTypeMatchers(
-                    DispatcherType.ERROR
-                ).permitAll()
 
                 // Kubernetes Health Check 허용
                 .requestMatchers(
@@ -91,7 +63,13 @@ public class SecurityConfig {
                     "/actuator/health/readiness"
                 ).permitAll()
 
-                // 나머지 actuator 접근 차단
+                // Prometheus Metrics 허용
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/actuator/prometheus"
+                ).permitAll()
+
+                // 나머지 Actuator 접근 차단
                 .requestMatchers(
                     "/actuator/**"
                 ).denyAll()
@@ -101,15 +79,14 @@ public class SecurityConfig {
                     "/api/v1/orders/**"
                 ).authenticated()
 
-                // 그 외 요청 차단
+                // 그 외 모든 요청 차단
                 .anyRequest().denyAll()
             )
 
-            // Authorization: Bearer JWT 검증
-            .oauth2ResourceServer(oauth ->
-                oauth.jwt(Customizer.withDefaults())
-            )
+            .oauth2ResourceServer(oauth2 ->
+                oauth2.jwt(Customizer.withDefaults())
+            );
 
-            .build();
+        return http.build();
     }
 }
