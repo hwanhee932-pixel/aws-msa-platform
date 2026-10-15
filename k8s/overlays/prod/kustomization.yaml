@@ -1,15 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
 resources:
   - ../../base
+
 namespace: msa
-# Pin production images to immutable Git SHA tags:
+
 images:
-  - name: YOUR_ECR_REGISTRY/api-gateway
-    newTag: REPLACE_ME
-  - name: YOUR_ECR_REGISTRY/member-service
-    newTag: REPLACE_ME
-  - name: YOUR_ECR_REGISTRY/product-service
-    newTag: REPLACE_ME
-  - name: YOUR_ECR_REGISTRY/order-service
-    newTag: REPLACE_ME
-  - name: YOUR_ECR_REGISTRY/frontend
-    newTag: REPLACE_ME
+  - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
+    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+
+  - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
+    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+
+  - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
+    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+
+  - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
+    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+
+  - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
+    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155

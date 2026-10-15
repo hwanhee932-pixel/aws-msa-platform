@@ -3,15 +3,19 @@ kind: Application
 metadata:
   name: msa-platform
   namespace: argocd
+
 spec:
   project: default
+
   source:
-    repoURL: https://github.com/YOUR_GITHUB_ORG/YOUR_REPO.git
+    repoURL: https://github.com/hwanhee932-pixel/aws-msa-platform.git
     targetRevision: main
     path: k8s/overlays/prod
+
   destination:
     server: https://kubernetes.default.svc
     namespace: msa
+
   syncPolicy:
     automated:
       prune: true
