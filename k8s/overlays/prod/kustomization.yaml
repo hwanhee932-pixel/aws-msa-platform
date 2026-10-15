@@ -8,16 +8,16 @@ namespace: msa
 
 images:
   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
-    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+    newTag: ea1309ea1f76daf031427670db9c2efab685d261
 
   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
-    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+    newTag: ea1309ea1f76daf031427670db9c2efab685d261
 
   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
-    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+    newTag: ea1309ea1f76daf031427670db9c2efab685d261
 
   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
-    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+    newTag: ea1309ea1f76daf031427670db9c2efab685d261
 
   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
-    newTag: 6eeac415f71ef72b3d93a1135fab12747ac1f155
+    newTag: ea1309ea1f76daf031427670db9c2efab685d261
