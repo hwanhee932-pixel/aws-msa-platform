@@ -44,6 +44,7 @@ function App() {
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
   const [productDescription, setProductDescription] = useState("");
+  const [productStock, setProductStock] = useState("");
 
   const [productImage, setProductImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -396,6 +397,15 @@ function App() {
       return;
     }
 
+    if (
+      productStock === "" ||
+      !Number.isInteger(Number(productStock)) ||
+      Number(productStock) < 0
+    ) {
+      setProductMessage("재고는 0개 이상의 정수로 입력해주세요.");
+      return;
+    }
+
     setProductSubmitting(true);
 
     try {
@@ -542,6 +552,7 @@ function App() {
             price: Number(productPrice),
             description: productDescription.trim(),
             imageKey,
+            stock: Number(productStock),
           }),
         }
       );
@@ -588,6 +599,7 @@ function App() {
       setProductName("");
       setProductPrice("");
       setProductDescription("");
+      setProductStock("");
       setProductImage(null);
 
       if (imagePreview) {
@@ -659,6 +671,13 @@ function App() {
       return;
     }
 
+    if (quantity > (orderProduct.stock ?? 0)) {
+      setOrderMessage(
+        `재고가 부족합니다. 현재 재고: ${orderProduct.stock ?? 0}개`
+      );
+      return;
+    }
+
     setOrderSubmitting(true);
     setOrderMessage("");
 
@@ -718,6 +737,8 @@ function App() {
       setOrderMessage(
         `주문 완료! 주문번호 #${data.id}`
       );
+
+      await loadProducts();
 
       if (showOrders) {
         await loadOrders();
@@ -1121,6 +1142,22 @@ function App() {
               </div>
 
               <div className="form-group">
+                <label>재고</label>
+
+                <input
+                  type="number"
+                  placeholder="예: 100"
+                  value={productStock}
+                  onChange={(event) =>
+                    setProductStock(event.target.value)
+                  }
+                  min="0"
+                  step="1"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
                 <label>상품 설명</label>
 
                 <textarea
@@ -1296,7 +1333,7 @@ function App() {
                       </p>
 
                       <div className="product-meta">
-                        상품번호 #{product.id}
+                        상품번호 #{product.id} · 재고 {product.stock ?? 0}개
                       </div>
 
                       <button
@@ -1305,8 +1342,11 @@ function App() {
                         onClick={() =>
                           openOrderModal(product)
                         }
+                        disabled={(product.stock ?? 0) <= 0}
                       >
-                        주문하기
+                        {(product.stock ?? 0) > 0
+                          ? "주문하기"
+                          : "품절"}
                       </button>
                     </div>
                   </article>
@@ -1535,6 +1575,7 @@ function App() {
                 <input
                   type="number"
                   min="1"
+                  max={orderProduct.stock ?? 0}
                   step="1"
                   value={orderQuantity}
                   onChange={(event) =>
