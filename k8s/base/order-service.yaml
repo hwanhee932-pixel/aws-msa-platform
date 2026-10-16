@@ -69,8 +69,6 @@ kind: Service
 metadata:
   name: order-service
   namespace: msa
-
-  # Prometheus ServiceMonitor媛 Service瑜?李얘린 ?꾪븳 Label
   labels:
     monitoring: msa
 
@@ -79,7 +77,6 @@ spec:
     app: order-service
 
   ports:
-    # ServiceMonitor endpoints.port: http ? ?곌껐
     - name: http
       port: 8080
       targetPort: 8080
