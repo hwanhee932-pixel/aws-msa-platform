@@ -20,4 +20,4 @@ images:
      newTag: fee32fb25a46ffb9fbf383f60e65f5eb1209aff9
 
    - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
-     newTag: b74541533a9b54cde4716bd0aa3fcf3006037c3b
+     newTag: 54856bcd2ad2ded234cad29ffe6486f7601ee384
