@@ -1,44 +1,19 @@
-# ============================================================
-# Grafana TLS Certificate
-# ============================================================
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: grafana-tls
-  namespace: monitoring
-
-spec:
-  secretName: grafana-tls
-
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
-
-  dnsNames:
-    - grafana.wecnedu.com
-
----
-# ============================================================
-# Grafana Ingress
-# ============================================================
-apiVersion: networking.k8s.io/v1
+﻿apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: grafana-ingress
+  name: monitoring-public
   namespace: monitoring
-
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-
+    alb.ingress.kubernetes.io/group.name: msa-platform-public
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:088923313316:certificate/cfd2a39c-ed1d-44fc-bd61-db87cf6fe058
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/success-codes: '200-399'
 spec:
-  ingressClassName: nginx
-
-  tls:
-    - hosts:
-        - grafana.wecnedu.com
-      secretName: grafana-tls
-
+  ingressClassName: alb
   rules:
     - host: grafana.wecnedu.com
       http:
@@ -47,6 +22,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: monitoring-grafana
+                name: kube-prometheus-stack-grafana
                 port:
                   number: 80
