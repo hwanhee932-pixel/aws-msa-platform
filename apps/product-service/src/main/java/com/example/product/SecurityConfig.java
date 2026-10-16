@@ -1,6 +1,6 @@
 package com.example.product;
 
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -12,7 +12,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -25,17 +27,29 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
 
+        byte[] bytes = Base64.getDecoder().decode(jwtSecret);
+
+        if (bytes.length < 64) {
+            throw new IllegalArgumentException(
+                "JWT_SECRET must contain at least 64 decoded bytes"
+            );
+        }
+
         SecretKey key = new SecretKeySpec(
-            jwtSecret.getBytes(StandardCharsets.UTF_8),
+            bytes,
             "HmacSHA512"
         );
 
-        return NimbusJwtDecoder
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
             .withSecretKey(key)
-            .macAlgorithm(
-                org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS512
-            )
+            .macAlgorithm(MacAlgorithm.HS512)
             .build();
+
+        decoder.setJwtValidator(
+            JwtValidators.createDefault()
+        );
+
+        return decoder;
     }
 
     @Bean
@@ -55,7 +69,6 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
 
-                // Kubernetes Health Check 허용
                 .requestMatchers(
                     HttpMethod.GET,
                     "/actuator/health",
@@ -63,31 +76,25 @@ public class SecurityConfig {
                     "/actuator/health/readiness"
                 ).permitAll()
 
-                // Prometheus Metrics 허용
                 .requestMatchers(
                     HttpMethod.GET,
                     "/actuator/prometheus"
                 ).permitAll()
 
-                // 상품 목록 / 상세 조회 공개
                 .requestMatchers(
                     HttpMethod.GET,
                     "/api/v1/products",
                     "/api/v1/products/*"
                 ).permitAll()
 
-                // 나머지 Actuator 접근 차단
                 .requestMatchers(
                     "/actuator/**"
                 ).denyAll()
 
-                // 상품 등록 / 수정 / 삭제 / 이미지 Presigned URL
-                // 로그인한 사용자만 허용
                 .requestMatchers(
                     "/api/v1/products/**"
                 ).authenticated()
 
-                // 그 외 모든 요청 차단
                 .anyRequest().denyAll()
             )
 
