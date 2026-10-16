@@ -1,6 +1,6 @@
 alertmanager:
   alertmanagerSpec:
-    serviceAccountName: monitoring-kube-prometheus-alertmanager
+    serviceAccountName: kube-prometheus-stack-alertmanager
 
   config:
     global:
@@ -15,7 +15,7 @@ alertmanager:
       group_interval: 1m
       repeat_interval: 4h
 
-      # Watchdog는 항상 Firing 상태이므로 SNS로 보내지 않음
+      # Watchdog 알림은 SNS로 보내지 않음
       routes:
         - receiver: "null"
           matchers:
@@ -31,5 +31,5 @@ alertmanager:
             subject: "MSA Platform Alert"
             send_resolved: true
 
-      # Watchdog 알림 무시용
+      # Watchdog 알림 무시
       - name: "null"
