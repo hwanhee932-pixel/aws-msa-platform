@@ -5,3 +5,4 @@ resources:
   - msa-servicemonitor.yaml
   - grafana-ingress.yaml
   - msa-alert-rules.yaml
+  - grafana-dashboard-configmap.yaml
