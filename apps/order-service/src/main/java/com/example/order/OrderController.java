@@ -6,11 +6,15 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
@@ -19,18 +23,40 @@ public class OrderController {
 
     private final OrderRepository repo;
 
-    public OrderController(OrderRepository repo) {
+    private final RestClient productClient;
+
+
+    // =========================================================
+    // 생성자
+    // =========================================================
+
+    public OrderController(
+
+            OrderRepository repo,
+
+            RestClient.Builder restClientBuilder,
+
+            @Value("${app.services.product-url}")
+            String productServiceUrl) {
+
         this.repo = repo;
+
+        this.productClient =
+            restClientBuilder
+                .baseUrl(productServiceUrl)
+                .build();
     }
 
-    /*
-     * =========================================================
-     * 주문 생성 Request DTO
-     *
-     * memberId는 프론트에서 받지 않음
-     * JWT subject에서 로그인 회원 ID를 가져옴
-     * =========================================================
-     */
+
+    // =========================================================
+    // 주문 생성 Request
+    //
+    // {
+    //   "productId": 1,
+    //   "quantity": 2
+    // }
+    // =========================================================
+
     public record CreateRequest(
 
         @NotNull
@@ -40,15 +66,52 @@ public class OrderController {
         @Min(1)
         Integer quantity
 
-    ) {}
+    ) {
+    }
 
 
-    /*
-     * =========================================================
-     * 주문 생성
-     * POST /api/v1/orders
-     * =========================================================
-     */
+    // =========================================================
+    // Product Service 재고 차감 Request
+    // =========================================================
+
+    public record StockDecreaseRequest(
+
+        Integer quantity
+
+    ) {
+    }
+
+
+    // =========================================================
+    // Product Service 재고 차감 Response
+    // =========================================================
+
+    public record StockDecreaseResponse(
+
+        Long productId,
+
+        Integer quantity,
+
+        Integer remainingStock
+
+    ) {
+    }
+
+
+    // =========================================================
+    // 주문 생성
+    //
+    // POST /api/v1/orders
+    //
+    // 처리 순서:
+    //
+    // 1. JWT 사용자 확인
+    // 2. Product Service 호출
+    // 3. 상품 재고 차감
+    // 4. 주문 DB 저장
+    // 5. 주문 결과 반환
+    // =========================================================
+
     @PostMapping
     public ResponseEntity<CustomerOrder> create(
 
@@ -59,18 +122,21 @@ public class OrderController {
             @RequestBody
             CreateRequest request) {
 
-        /*
-         * JWT에서 로그인 회원 ID 추출
-         */
-        Long memberId = memberId(jwt);
+        // -----------------------------------------------------
+        // 1. 로그인 사용자 확인
+        // -----------------------------------------------------
+
+        Long memberId =
+            memberId(jwt);
 
 
-        /*
-         * 주문 객체 생성
-         */
-        CustomerOrder order = new CustomerOrder(
+        // -----------------------------------------------------
+        // 2. Product Service 재고 차감
+        // -----------------------------------------------------
 
-            memberId,
+        decreaseProductStock(
+
+            jwt,
 
             request.productId(),
 
@@ -78,12 +144,32 @@ public class OrderController {
         );
 
 
-        /*
-         * order_db 저장
-         */
+        // -----------------------------------------------------
+        // 3. 주문 객체 생성
+        // -----------------------------------------------------
+
+        CustomerOrder order =
+            new CustomerOrder(
+
+                memberId,
+
+                request.productId(),
+
+                request.quantity()
+            );
+
+
+        // -----------------------------------------------------
+        // 4. 주문 DB 저장
+        // -----------------------------------------------------
+
         CustomerOrder savedOrder =
             repo.save(order);
 
+
+        // -----------------------------------------------------
+        // 5. 201 Created
+        // -----------------------------------------------------
 
         return ResponseEntity
             .status(HttpStatus.CREATED)
@@ -91,35 +177,33 @@ public class OrderController {
     }
 
 
-    /*
-     * =========================================================
-     * 내 주문 목록 조회
-     * GET /api/v1/orders
-     *
-     * memberId를 Query Parameter로 받지 않음
-     * JWT에서 로그인 회원 ID 자동 확인
-     * =========================================================
-     */
+    // =========================================================
+    // 내 주문 목록 조회
+    //
+    // GET /api/v1/orders
+    // =========================================================
+
     @GetMapping
     public List<CustomerOrder> list(
 
             @AuthenticationPrincipal
             Jwt jwt) {
 
-        Long memberId = memberId(jwt);
+        Long memberId =
+            memberId(jwt);
 
-        return repo.findByMemberId(memberId);
+        return repo.findByMemberId(
+            memberId
+        );
     }
 
 
-    /*
-     * =========================================================
-     * 주문 단건 조회
-     * GET /api/v1/orders/{id}
-     *
-     * 자기 주문만 조회 가능
-     * =========================================================
-     */
+    // =========================================================
+    // 주문 단건 조회
+    //
+    // GET /api/v1/orders/{id}
+    // =========================================================
+
     @GetMapping("/{id}")
     public CustomerOrder get(
 
@@ -129,26 +213,30 @@ public class OrderController {
             @AuthenticationPrincipal
             Jwt jwt) {
 
-        Long memberId = memberId(jwt);
+        Long memberId =
+            memberId(jwt);
 
 
         CustomerOrder order =
             repo.findById(id)
-                .orElseThrow(() ->
+                .orElseThrow(
+                    () ->
+                        new ResponseStatusException(
 
-                    new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
 
-                        HttpStatus.NOT_FOUND,
-
-                        "Order not found"
-                    )
+                            "Order not found"
+                        )
                 );
 
 
-        /*
-         * 다른 회원의 주문 조회 방지
-         */
-        if (!order.getMemberId().equals(memberId)) {
+        // -----------------------------------------------------
+        // 다른 사용자의 주문 조회 방지
+        // -----------------------------------------------------
+
+        if (!order
+                .getMemberId()
+                .equals(memberId)) {
 
             throw new ResponseStatusException(
 
@@ -163,17 +251,139 @@ public class OrderController {
     }
 
 
-    /*
-     * =========================================================
-     * JWT → Member ID
-     * =========================================================
-     */
+    // =========================================================
+    // Product Service 재고 차감
+    // =========================================================
+
+    private StockDecreaseResponse decreaseProductStock(
+
+            Jwt jwt,
+
+            Long productId,
+
+            Integer quantity) {
+
+        try {
+
+            StockDecreaseResponse response =
+                productClient
+                    .post()
+                    .uri(
+                        "/api/v1/products/{id}/stock/decrease",
+                        productId
+                    )
+
+                    // 사용자가 보낸 JWT를
+                    // Product Service에도 그대로 전달
+                    .headers(headers ->
+                        headers.setBearerAuth(
+                            jwt.getTokenValue()
+                        )
+                    )
+
+                    .body(
+                        new StockDecreaseRequest(
+                            quantity
+                        )
+                    )
+
+                    .retrieve()
+
+                    .body(
+                        StockDecreaseResponse.class
+                    );
+
+
+            if (response == null) {
+
+                throw new ResponseStatusException(
+
+                    HttpStatus.BAD_GATEWAY,
+
+                    "Invalid response from product service"
+                );
+            }
+
+
+            return response;
+
+
+        } catch (HttpClientErrorException.NotFound exception) {
+
+            // Product Service -> 404
+            throw new ResponseStatusException(
+
+                HttpStatus.NOT_FOUND,
+
+                "Product not found"
+            );
+
+
+        } catch (HttpClientErrorException.Conflict exception) {
+
+            // Product Service -> 409
+            throw new ResponseStatusException(
+
+                HttpStatus.CONFLICT,
+
+                "Insufficient stock"
+            );
+
+
+        } catch (HttpClientErrorException.Unauthorized exception) {
+
+            // Product Service -> 401
+            throw new ResponseStatusException(
+
+                HttpStatus.UNAUTHORIZED,
+
+                "Authentication failed"
+            );
+
+
+        } catch (HttpClientErrorException.Forbidden exception) {
+
+            // Product Service -> 403
+            throw new ResponseStatusException(
+
+                HttpStatus.FORBIDDEN,
+
+                "Product service access denied"
+            );
+
+
+        } catch (HttpClientErrorException exception) {
+
+            // 기타 4xx
+            throw new ResponseStatusException(
+
+                HttpStatus.BAD_GATEWAY,
+
+                "Product service request failed"
+            );
+
+
+        } catch (ResourceAccessException exception) {
+
+            // Product Service 연결 실패
+            throw new ResponseStatusException(
+
+                HttpStatus.SERVICE_UNAVAILABLE,
+
+                "Product service unavailable"
+            );
+        }
+    }
+
+
+    // =========================================================
+    // JWT에서 Member ID 추출
+    // =========================================================
+
     private Long memberId(
+
             Jwt jwt) {
 
-        /*
-         * 인증되지 않은 사용자
-         */
         if (jwt == null) {
 
             throw new ResponseStatusException(
@@ -187,10 +397,6 @@ public class OrderController {
 
         try {
 
-            /*
-             * 로그인할 때 생성된 JWT의 subject가
-             * Member ID
-             */
             Long id =
                 Long.valueOf(
                     jwt.getSubject()

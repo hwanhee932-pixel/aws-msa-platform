@@ -1,6 +1,7 @@
 package com.example.product;
 
 import java.math.BigDecimal;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -26,26 +27,84 @@ public class Product {
     @Column(name = "image_key", length = 512)
     private String imageKey;
 
-    protected Product() {}
+    // 상품 재고
+    @Column(nullable = false)
+    private Integer stock = 0;
 
-    public Product(Long ownerId, String name, BigDecimal price,
-                   String description, String imageKey) {
-        this.ownerId = ownerId;
-        update(name, price, description, imageKey);
+    protected Product() {
     }
 
-    public void update(String name, BigDecimal price,
-                       String description, String imageKey) {
+    public Product(
+            Long ownerId,
+            String name,
+            BigDecimal price,
+            String description,
+            String imageKey,
+            Integer stock) {
+
+        this.ownerId = ownerId;
+        update(name, price, description, imageKey, stock);
+    }
+
+    public void update(
+            String name,
+            BigDecimal price,
+            String description,
+            String imageKey,
+            Integer stock) {
+
         this.name = name;
         this.price = price;
         this.description = description;
         this.imageKey = imageKey;
+        this.stock = stock;
     }
 
-    public Long getId() { return id; }
-    public Long getOwnerId() { return ownerId; }
-    public String getName() { return name; }
-    public BigDecimal getPrice() { return price; }
-    public String getDescription() { return description; }
-    public String getImageKey() { return imageKey; }
+    /**
+     * 주문 시 재고 차감
+     */
+    public void decreaseStock(Integer quantity) {
+
+        if (quantity == null || quantity <= 0) {
+            throw new IllegalArgumentException(
+                "Quantity must be greater than 0"
+            );
+        }
+
+        if (stock < quantity) {
+            throw new IllegalArgumentException(
+                "Insufficient stock"
+            );
+        }
+
+        stock -= quantity;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getOwnerId() {
+        return ownerId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public String getImageKey() {
+        return imageKey;
+    }
+
+    public Integer getStock() {
+        return stock;
+    }
 }

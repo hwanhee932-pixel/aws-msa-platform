@@ -6,7 +6,12 @@ import java.util.Map;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -49,11 +54,10 @@ public class ProductController {
         this.bucket = bucket;
     }
 
-    /*
-     * =========================================================
-     * Request DTO
-     * =========================================================
-     */
+
+    // =========================================================
+    // 상품 생성/수정 Request
+    // =========================================================
 
     public record ProductRequest(
 
@@ -70,16 +74,19 @@ public class ProductController {
         String description,
 
         @Size(max = 512)
-        String imageKey
+        String imageKey,
 
-    ) {}
+        @NotNull
+        @Min(0)
+        Integer stock
+
+    ) {
+    }
 
 
-    /*
-     * =========================================================
-     * Response DTO
-     * =========================================================
-     */
+    // =========================================================
+    // 상품 Response
+    // =========================================================
 
     public record ProductResponse(
 
@@ -95,30 +102,62 @@ public class ProductController {
 
         String imageKey,
 
-        String imageUrl
+        String imageUrl,
 
-    ) {}
+        Integer stock
+
+    ) {
+    }
 
 
-    /*
-     * =========================================================
-     * Image Request DTO
-     * =========================================================
-     */
+    // =========================================================
+    // 이미지 Presigned URL Request
+    // =========================================================
 
     public record ImageRequest(
 
         @NotBlank
         String contentType
 
-    ) {}
+    ) {
+    }
 
 
-    /*
-     * =========================================================
-     * 상품 전체 조회
-     * =========================================================
-     */
+    // =========================================================
+    // 재고 차감 Request
+    // =========================================================
+
+    public record StockDecreaseRequest(
+
+        @NotNull
+        @Min(1)
+        Integer quantity
+
+    ) {
+    }
+
+
+    // =========================================================
+    // 재고 차감 Response
+    // =========================================================
+
+    public record StockDecreaseResponse(
+
+        Long productId,
+
+        Integer quantity,
+
+        Integer remainingStock
+
+    ) {
+    }
+
+
+    // =========================================================
+    // 상품 전체 조회
+    //
+    // GET /api/v1/products
+    // =========================================================
 
     @GetMapping
     public Page<ProductResponse> list(
@@ -129,9 +168,6 @@ public class ProductController {
             @RequestParam(defaultValue = "20")
             int size) {
 
-        /*
-         * 비정상적인 page/size 방지
-         */
         if (page < 0 || size < 1 || size > 100) {
 
             throw new ResponseStatusException(
@@ -140,15 +176,6 @@ public class ProductController {
             );
         }
 
-        /*
-         * DB 조회 후
-         *
-         * Product Entity
-         *      ↓
-         * ProductResponse DTO
-         *
-         * 로 변환
-         */
         return repo.findAll(
                 PageRequest.of(
                     page,
@@ -163,11 +190,11 @@ public class ProductController {
     }
 
 
-    /*
-     * =========================================================
-     * 상품 단건 조회
-     * =========================================================
-     */
+    // =========================================================
+    // 상품 단건 조회
+    //
+    // GET /api/v1/products/{id}
+    // =========================================================
 
     @GetMapping("/{id}")
     public ProductResponse get(
@@ -181,11 +208,11 @@ public class ProductController {
     }
 
 
-    /*
-     * =========================================================
-     * 상품 생성
-     * =========================================================
-     */
+    // =========================================================
+    // 상품 생성
+    //
+    // POST /api/v1/products
+    // =========================================================
 
     @PostMapping
     public ResponseEntity<ProductResponse> create(
@@ -197,39 +224,26 @@ public class ProductController {
             @RequestBody
             ProductRequest request) {
 
-        /*
-         * JWT subject에서 회원 ID 획득
-         */
-        Long ownerId = memberId(jwt);
+        Long ownerId =
+            memberId(jwt);
 
-
-        /*
-         * 다른 사용자의 S3 경로를
-         * 사용할 수 없도록 검증
-         */
         checkImageKey(
             request.imageKey(),
             ownerId
         );
 
-
-        Product product = new Product(
-
-            ownerId,
-
-            request.name(),
-
-            request.price(),
-
-            request.description(),
-
-            request.imageKey()
-        );
-
+        Product product =
+            new Product(
+                ownerId,
+                request.name(),
+                request.price(),
+                request.description(),
+                request.imageKey(),
+                request.stock()
+            );
 
         Product savedProduct =
             repo.save(product);
-
 
         return ResponseEntity
             .status(HttpStatus.CREATED)
@@ -239,11 +253,11 @@ public class ProductController {
     }
 
 
-    /*
-     * =========================================================
-     * 상품 수정
-     * =========================================================
-     */
+    // =========================================================
+    // 상품 수정
+    //
+    // PUT /api/v1/products/{id}
+    // =========================================================
 
     @PutMapping("/{id}")
     public ProductResponse update(
@@ -261,44 +275,29 @@ public class ProductController {
         Product product =
             find(id);
 
-
         Long ownerId =
             memberId(jwt);
 
-
-        /*
-         * 상품 소유자 검증
-         */
         checkOwner(
             product,
             ownerId
         );
 
-
-        /*
-         * S3 이미지 Key 검증
-         */
         checkImageKey(
             request.imageKey(),
             ownerId
         );
 
-
         product.update(
-
             request.name(),
-
             request.price(),
-
             request.description(),
-
-            request.imageKey()
+            request.imageKey(),
+            request.stock()
         );
-
 
         Product savedProduct =
             repo.save(product);
-
 
         return toResponse(
             savedProduct
@@ -306,11 +305,11 @@ public class ProductController {
     }
 
 
-    /*
-     * =========================================================
-     * 상품 삭제
-     * =========================================================
-     */
+    // =========================================================
+    // 상품 삭제
+    //
+    // DELETE /api/v1/products/{id}
+    // =========================================================
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
@@ -324,19 +323,15 @@ public class ProductController {
         Product product =
             find(id);
 
-
         Long ownerId =
             memberId(jwt);
-
 
         checkOwner(
             product,
             ownerId
         );
 
-
         repo.delete(product);
-
 
         return ResponseEntity
             .noContent()
@@ -344,11 +339,74 @@ public class ProductController {
     }
 
 
-    /*
-     * =========================================================
-     * S3 이미지 업로드용 Presigned PUT URL
-     * =========================================================
-     */
+    // =========================================================
+    // 재고 차감
+    //
+    // POST /api/v1/products/{id}/stock/decrease
+    //
+    // Request:
+    // {
+    //   "quantity": 2
+    // }
+    // =========================================================
+
+    @PostMapping("/{id}/stock/decrease")
+    public StockDecreaseResponse decreaseStock(
+
+            @PathVariable
+            Long id,
+
+            @AuthenticationPrincipal
+            Jwt jwt,
+
+            @Valid
+            @RequestBody
+            StockDecreaseRequest request) {
+
+        // 인증된 요청인지 확인
+        memberId(jwt);
+
+        // 상품이 실제 존재하는지 먼저 확인
+        if (!repo.existsById(id)) {
+
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Product not found"
+            );
+        }
+
+        int updatedRows =
+            repo.decreaseStock(
+                id,
+                request.quantity()
+            );
+
+        // 상품은 존재하지만 UPDATE가 되지 않았다면
+        // 재고가 주문 수량보다 부족한 것
+        if (updatedRows == 0) {
+
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Insufficient stock"
+            );
+        }
+
+        Product product =
+            find(id);
+
+        return new StockDecreaseResponse(
+            id,
+            request.quantity(),
+            product.getStock()
+        );
+    }
+
+
+    // =========================================================
+    // S3 이미지 업로드 Presigned URL
+    //
+    // POST /api/v1/products/images/presigned-url
+    // =========================================================
 
     @PostMapping("/images/presigned-url")
     public Map<String, String> presign(
@@ -360,16 +418,9 @@ public class ProductController {
             @RequestBody
             ImageRequest request) {
 
-        /*
-         * 로그인 사용자 확인
-         */
         Long ownerId =
             memberId(jwt);
 
-
-        /*
-         * 허용할 이미지 MIME Type
-         */
         String extension =
             switch (request.contentType()) {
 
@@ -389,28 +440,15 @@ public class ProductController {
                     );
             };
 
-
-        /*
-         * S3 Object Key
-         *
-         * products/{memberId}/{UUID}.jpg
-         */
         String key =
-
             "products/"
-            + ownerId
-            + "/"
-            + UUID.randomUUID()
-            + extension;
+                + ownerId
+                + "/"
+                + UUID.randomUUID()
+                + extension;
 
-
-        /*
-         * S3 PUT 요청 정의
-         */
-        PutObjectRequest putRequest =
-
-            PutObjectRequest
-                .builder()
+        PutObjectRequest putObjectRequest =
+            PutObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
                 .contentType(
@@ -418,25 +456,17 @@ public class ProductController {
                 )
                 .build();
 
-
-        /*
-         * Presigned URL 설정
-         */
         PutObjectPresignRequest presignRequest =
-
-            PutObjectPresignRequest
-                .builder()
+            PutObjectPresignRequest.builder()
                 .signatureDuration(
                     UPLOAD_URL_DURATION
                 )
                 .putObjectRequest(
-                    putRequest
+                    putObjectRequest
                 )
                 .build();
 
-
         String uploadUrl =
-
             presigner
                 .presignPutObject(
                     presignRequest
@@ -444,29 +474,100 @@ public class ProductController {
                 .url()
                 .toString();
 
-
         return Map.of(
-
             "key",
             key,
-
             "uploadUrl",
-            uploadUrl,
-
-            "contentType",
-            request.contentType()
+            uploadUrl
         );
     }
 
 
-    /*
-     * =========================================================
-     * Entity → Response DTO
-     * =========================================================
-     */
+    // =========================================================
+    // 상품 조회
+    // =========================================================
+
+    private Product find(
+            Long id) {
+
+        return repo
+            .findById(id)
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found"
+                    )
+            );
+    }
+
+
+    // =========================================================
+    // 상품 소유자 확인
+    // =========================================================
+
+    private void checkOwner(
+
+            Product product,
+
+            Long ownerId) {
+
+        if (!product
+                .getOwnerId()
+                .equals(ownerId)) {
+
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "You cannot modify this product"
+            );
+        }
+    }
+
+
+    // =========================================================
+    // 이미지 Key 확인
+    // =========================================================
+
+    private void checkImageKey(
+
+            String imageKey,
+
+            Long ownerId) {
+
+        if (imageKey == null
+                || imageKey.isBlank()) {
+
+            return;
+        }
+
+        String expectedPrefix =
+            "products/"
+                + ownerId
+                + "/";
+
+        if (!imageKey.startsWith(
+                expectedPrefix)) {
+
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Invalid image key"
+            );
+        }
+    }
+
+
+    // =========================================================
+    // Product -> ProductResponse
+    // =========================================================
 
     private ProductResponse toResponse(
+
             Product product) {
+
+        String imageUrl =
+            createImageUrl(
+                product.getImageKey()
+            );
 
         return new ProductResponse(
 
@@ -482,61 +583,42 @@ public class ProductController {
 
             product.getImageKey(),
 
-            createImageUrl(
-                product.getImageKey()
-            )
+            imageUrl,
+
+            product.getStock()
         );
     }
 
 
-    /*
-     * =========================================================
-     * S3 이미지 조회용 Presigned GET URL 생성
-     * =========================================================
-     */
+    // =========================================================
+    // S3 다운로드용 Presigned GET URL
+    // =========================================================
 
     private String createImageUrl(
+
             String imageKey) {
 
-        /*
-         * 이미지가 없는 상품
-         */
         if (imageKey == null
                 || imageKey.isBlank()) {
 
             return null;
         }
 
-
-        /*
-         * S3 GET 요청 생성
-         */
-        GetObjectRequest getRequest =
-
-            GetObjectRequest
-                .builder()
+        GetObjectRequest getObjectRequest =
+            GetObjectRequest.builder()
                 .bucket(bucket)
                 .key(imageKey)
                 .build();
 
-
-        /*
-         * Presigned GET URL 생성
-         *
-         * 유효시간: 10분
-         */
         GetObjectPresignRequest presignRequest =
-
-            GetObjectPresignRequest
-                .builder()
+            GetObjectPresignRequest.builder()
                 .signatureDuration(
                     DOWNLOAD_URL_DURATION
                 )
                 .getObjectRequest(
-                    getRequest
+                    getObjectRequest
                 )
                 .build();
-
 
         return presigner
             .presignGetObject(
@@ -547,155 +629,41 @@ public class ProductController {
     }
 
 
-    /*
-     * =========================================================
-     * 상품 조회
-     * =========================================================
-     */
-
-    private Product find(
-            Long id) {
-
-        return repo
-            .findById(id)
-            .orElseThrow(() ->
-
-                new ResponseStatusException(
-
-                    HttpStatus.NOT_FOUND,
-
-                    "Product not found"
-                )
-            );
-    }
-
-
-    /*
-     * =========================================================
-     * JWT → Member ID
-     * =========================================================
-     */
+    // =========================================================
+    // JWT -> Member ID
+    // =========================================================
 
     private Long memberId(
+
             Jwt jwt) {
 
-        /*
-         * 인증되지 않은 사용자
-         */
         if (jwt == null) {
 
             throw new ResponseStatusException(
-
                 HttpStatus.UNAUTHORIZED,
-
                 "Authentication required"
             );
         }
 
-
         try {
 
-            /*
-             * JWT subject가
-             * member ID라고 가정
-             */
             Long id =
                 Long.valueOf(
                     jwt.getSubject()
                 );
-
 
             if (id <= 0) {
 
                 throw new NumberFormatException();
             }
 
-
             return id;
 
-
-        } catch (
-            NumberFormatException exception
-        ) {
+        } catch (NumberFormatException exception) {
 
             throw new ResponseStatusException(
-
                 HttpStatus.UNAUTHORIZED,
-
                 "Invalid member identity"
-            );
-        }
-    }
-
-
-    /*
-     * =========================================================
-     * 상품 소유자 확인
-     * =========================================================
-     */
-
-    private void checkOwner(
-
-            Product product,
-
-            Long memberId) {
-
-        if (!product
-                .getOwnerId()
-                .equals(memberId)) {
-
-            throw new ResponseStatusException(
-
-                HttpStatus.FORBIDDEN,
-
-                "Only the owner can modify this product"
-            );
-        }
-    }
-
-
-    /*
-     * =========================================================
-     * S3 Image Key 검증
-     * =========================================================
-     */
-
-    private void checkImageKey(
-
-            String key,
-
-            Long memberId) {
-
-        /*
-         * 이미지 없는 상품은 허용
-         */
-        if (key == null
-                || key.isBlank()) {
-
-            return;
-        }
-
-
-        /*
-         * 자신의 S3 디렉터리만 사용 가능
-         *
-         * products/{memberId}/
-         */
-        String prefix =
-
-            "products/"
-            + memberId
-            + "/";
-
-
-        if (!key.startsWith(prefix)
-                || key.contains("..")) {
-
-            throw new ResponseStatusException(
-
-                HttpStatus.BAD_REQUEST,
-
-                "Invalid image key"
             );
         }
     }
