@@ -34,17 +34,15 @@ public class OrderController {
 
             OrderRepository repo,
 
-            RestClient.Builder restClientBuilder,
-
             @Value("${app.services.product-url}")
             String productServiceUrl) {
 
         this.repo = repo;
 
+        // Spring Bean으로 RestClient.Builder를 주입받지 않고
+        // Product Service URL을 사용하여 직접 RestClient 생성
         this.productClient =
-            restClientBuilder
-                .baseUrl(productServiceUrl)
-                .build();
+            RestClient.create(productServiceUrl);
     }
 
 
@@ -354,7 +352,7 @@ public class OrderController {
 
         } catch (HttpClientErrorException exception) {
 
-            // 기타 4xx
+            // Product Service 기타 4xx
             throw new ResponseStatusException(
 
                 HttpStatus.BAD_GATEWAY,
