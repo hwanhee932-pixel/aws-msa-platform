@@ -1,6 +1,6 @@
 package com.example.order;
 
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -12,7 +12,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -25,17 +27,33 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
 
+        // Member Service / Product Service와 동일하게
+        // Secrets Manager의 Base64 JWT_SECRET을 디코딩해서 사용
+        byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+
+        // HS512는 최소 64바이트(512bit) 키 사용
+        if (keyBytes.length < 64) {
+            throw new IllegalStateException(
+                "JWT secret must be at least 64 bytes after Base64 decoding"
+            );
+        }
+
         SecretKey key = new SecretKeySpec(
-            jwtSecret.getBytes(StandardCharsets.UTF_8),
+            keyBytes,
             "HmacSHA512"
         );
 
-        return NimbusJwtDecoder
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
             .withSecretKey(key)
-            .macAlgorithm(
-                org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS512
-            )
+            .macAlgorithm(MacAlgorithm.HS512)
             .build();
+
+        // exp, nbf 등 기본 JWT 검증
+        decoder.setJwtValidator(
+            JwtValidators.createDefault()
+        );
+
+        return decoder;
     }
 
     @Bean
