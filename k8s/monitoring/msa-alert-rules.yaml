@@ -5,7 +5,7 @@ metadata:
   name: msa-alert-rules
   namespace: monitoring
   labels:
-    release: monitoring
+    release: kube-prometheus-stack
 
 spec:
   groups:
