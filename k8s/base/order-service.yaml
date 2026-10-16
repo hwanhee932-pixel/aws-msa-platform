@@ -1,4 +1,4 @@
-apiVersion: apps/v1
+﻿apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: order-service
@@ -21,7 +21,7 @@ spec:
 
       containers:
         - name: order-service
-          image: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/order-service:v20261014-pool
+          image: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/order-service:233a8afd3d8416f125f1d02004467090d8bc7769
           imagePullPolicy: IfNotPresent
 
           ports:
@@ -70,7 +70,7 @@ metadata:
   name: order-service
   namespace: msa
 
-  # Prometheus ServiceMonitor가 Service를 찾기 위한 Label
+  # Prometheus ServiceMonitor媛 Service瑜?李얘린 ?꾪븳 Label
   labels:
     monitoring: msa
 
@@ -79,7 +79,7 @@ spec:
     app: order-service
 
   ports:
-    # ServiceMonitor endpoints.port: http 와 연결
+    # ServiceMonitor endpoints.port: http ? ?곌껐
     - name: http
       port: 8080
       targetPort: 8080

@@ -1,4 +1,4 @@
-apiVersion: apps/v1
+﻿apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: product-service
@@ -21,7 +21,7 @@ spec:
 
       containers:
         - name: product-service
-          image: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/product-service:v20261014-pool
+          image: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/product-service:233a8afd3d8416f125f1d02004467090d8bc7769
           imagePullPolicy: IfNotPresent
 
           ports:
