@@ -17,7 +17,7 @@ images:
      newTag: 233a8afd3d8416f125f1d02004467090d8bc7769
 
    - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
-     newTag: 233a8afd3d8416f125f1d02004467090d8bc7769
+     newTag: fee32fb25a46ffb9fbf383f60e65f5eb1209aff9
 
    - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
      newTag: 43f30639dc0b60e38ca23fab604eee660645431f
