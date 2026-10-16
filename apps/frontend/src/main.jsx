@@ -478,8 +478,7 @@ function App() {
 
         if (
           !presignData.uploadUrl ||
-          !presignData.key ||
-          !presignData.contentType
+          !presignData.key
         ) {
           console.error(
             "잘못된 Presigned URL 응답:",
@@ -506,7 +505,7 @@ function App() {
             method: "PUT",
 
             headers: {
-              "Content-Type": presignData.contentType,
+              "Content-Type": productImage.type,
             },
 
             body: productImage,
