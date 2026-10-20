@@ -1,4 +1,4 @@
-apiVersion: v1
+﻿apiVersion: v1
 kind: ConfigMap
 metadata:
   name: api-gateway-config
@@ -16,7 +16,7 @@ metadata:
   namespace: msa
 data:
   DB_URL: jdbc:mysql://msa-platform-new.clo62q46ww0g.ap-northeast-2.rds.amazonaws.com:3306/member_db?useSSL=true
-  REDIS_HOST: master.msa-platform.hvkyef.apn2.cache.amazonaws.com
+  REDIS_HOST: master.msa-platform.neyvs2.apn2.cache.amazonaws.com
   REDIS_PORT: "6379"
   DDL_AUTO: "update"
 
