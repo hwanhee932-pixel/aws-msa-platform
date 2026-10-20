@@ -5,7 +5,7 @@ metadata:
   namespace: msa
 
 spec:
-  replicas: 2
+  replicas: 3
 
   selector:
     matchLabels:
@@ -28,7 +28,8 @@ spec:
 
       containers:
         - name: api-gateway
-          image: "088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway:93f970db5319ccbcbd8cff77fa09e953d0cf2e38"
+          image: "683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway:latest"
+          imagePullPolicy: Always
 
           ports:
             - name: http
@@ -36,13 +37,13 @@ spec:
 
           env:
             - name: MEMBER_URL
-              value: http://member-service:8080
+              value: "http://member-service:8080"
 
             - name: PRODUCT_URL
-              value: http://product-service:8080
+              value: "http://product-service:8080"
 
             - name: ORDER_URL
-              value: http://order-service:8080
+              value: "http://order-service:8080"
 
             - name: JWT_SECRET
               valueFrom:

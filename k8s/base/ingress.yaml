@@ -1,41 +1,22 @@
-﻿apiVersion: networking.k8s.io/v1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: public
   namespace: msa
   annotations:
-    # 여러 Namespace의 Ingress가 동일한 ALB를 공유
     alb.ingress.kubernetes.io/group.name: msa-platform-public
-
-    # Internet-facing ALB
     alb.ingress.kubernetes.io/scheme: internet-facing
-
-    # Pod IP를 ALB Target으로 사용
     alb.ingress.kubernetes.io/target-type: ip
-
-    # HTTP 80 / HTTPS 443
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
-
-    # ACM 인증서
-    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-northeast-2:088923313316:certificate/cfd2a39c-ed1d-44fc-bd61-db87cf6fe058"
-
-    # HTTP -> HTTPS Redirect
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-northeast-2:683668078297:certificate/b2436eca-1ada-4ebe-8590-8d2a95c1a65f"
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-
-    # ALB Health Check
     alb.ingress.kubernetes.io/healthcheck-path: /
-
-    # 정상 응답 코드
     alb.ingress.kubernetes.io/success-codes: "200-399"
 
 spec:
   ingressClassName: alb
 
   rules:
-    # ==========================================
-    # Backend API
-    # https://api.wecnedu.com
-    # ==========================================
     - host: api.wecnedu.com
       http:
         paths:
@@ -47,10 +28,6 @@ spec:
                 port:
                   number: 8080
 
-    # ==========================================
-    # Frontend
-    # https://www.wecnedu.com
-    # ==========================================
     - host: www.wecnedu.com
       http:
         paths:

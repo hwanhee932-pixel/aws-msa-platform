@@ -24,7 +24,7 @@ spec:
 
       containers:
         - name: member-service
-          image: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/member-service:v20261014-1215
+          image: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service:latest
           imagePullPolicy: IfNotPresent
 
           ports:
@@ -72,8 +72,6 @@ kind: Service
 metadata:
   name: member-service
   namespace: msa
-
-  # Prometheus ServiceMonitor가 이 Service를 찾기 위한 Label
   labels:
     monitoring: msa
 
@@ -82,7 +80,6 @@ spec:
     app: member-service
 
   ports:
-    # ServiceMonitor의 endpoints.port: http 와 연결
     - name: http
       port: 8080
       targetPort: 8080
