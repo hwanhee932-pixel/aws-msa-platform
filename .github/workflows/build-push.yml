@@ -29,9 +29,11 @@ jobs:
           - frontend
 
     steps:
+      # 1. GitHub Repository Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. AWS OIDC Authentication
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -39,27 +41,46 @@ jobs:
           role-session-name: github-actions-${{ matrix.service }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # 3. Login to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 4. Build Docker Image and Push to ECR
       - name: Build and push
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
           SERVICE: ${{ matrix.service }}
           TAG: ${{ github.sha }}
+
         run: |
-          echo "Building $SERVICE:$TAG"
+          echo "=========================================="
+          echo "Service  : $SERVICE"
+          echo "Registry : $REGISTRY"
+          echo "Tag      : $TAG"
+          echo "=========================================="
 
           if [ "$SERVICE" = "frontend" ]; then
+
+            echo "Building frontend..."
+
             docker build \
+              -f "apps/frontend/Dockerfile" \
               -t "$REGISTRY/$SERVICE:$TAG" \
-              "apps/frontend"
+              .
+
           else
+
+            echo "Building $SERVICE..."
+
             docker build \
               -f "apps/$SERVICE/Dockerfile" \
               -t "$REGISTRY/$SERVICE:$TAG" \
               .
+
           fi
 
           echo "Pushing $REGISTRY/$SERVICE:$TAG"
+
           docker push "$REGISTRY/$SERVICE:$TAG"
+
+          echo "Push completed: $REGISTRY/$SERVICE:$TAG"
