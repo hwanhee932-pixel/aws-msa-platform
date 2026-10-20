@@ -7,17 +7,17 @@ resources:
 namespace: msa
 
 images:
-   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
-     newTag: a1944189f75b8085750ee980302869f7b804148e
+  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
+    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
 
-   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
-     newTag: a1944189f75b8085750ee980302869f7b804148e
+  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
+    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
 
-   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
-     newTag: 451a05761f6f31f7673f2d57ebfc7212cec9ae97
+  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
+    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
 
-   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
-     newTag: f9c8c6a2862ae767162994ea0f223874a158b16c
+  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
+    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
 
-   - name: 088923313316.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
-     newTag: 54856bcd2ad2ded234cad29ffe6486f7601ee384
+  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
+    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
