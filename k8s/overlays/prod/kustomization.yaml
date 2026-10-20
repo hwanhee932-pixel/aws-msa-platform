@@ -2,22 +2,27 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../../base
+- ../../base
 
 namespace: msa
 
+
+
+
+
 images:
-  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
-    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
-
-  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
-    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
-
-  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
-    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
-
-  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
-    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
-
-  - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
-    newTag: 35b7d3c4bd63b435f9b853de0e9fbbe69c38cefe
+- name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
+  newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/api-gateway
+  newTag: 87de3cbc2a016a689df8b881c3c826db232a3541
+- name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
+  newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/frontend
+  newTag: 87de3cbc2a016a689df8b881c3c826db232a3541
+- name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
+  newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
+  newTag: 87de3cbc2a016a689df8b881c3c826db232a3541
+- name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
+  newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
+  newTag: 87de3cbc2a016a689df8b881c3c826db232a3541
+- name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
+  newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/product-service
+  newTag: 87de3cbc2a016a689df8b881c3c826db232a3541
