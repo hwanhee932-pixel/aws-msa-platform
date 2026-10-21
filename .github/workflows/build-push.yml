@@ -15,28 +15,123 @@ permissions:
   id-token: write
 
 jobs:
+
   # ==========================================================
-  # 1. Build Docker Images and Push to Amazon ECR
+  # 1. Detect Changed Services
+  # ==========================================================
+  changes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: set-matrix
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          echo "Before: $BEFORE"
+          echo "After : $AFTER"
+
+          CHANGED_FILES="$(git diff --name-only "$BEFORE" "$AFTER")"
+
+          echo "=========================================="
+          echo "Changed files"
+          echo "=========================================="
+          echo "$CHANGED_FILES"
+
+          SERVICES=()
+
+          if echo "$CHANGED_FILES" | grep -qE '^apps/api-gateway/'; then
+            SERVICES+=("api-gateway")
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE '^apps/member-service/'; then
+            SERVICES+=("member-service")
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE '^apps/product-service/'; then
+            SERVICES+=("product-service")
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE '^apps/order-service/'; then
+            SERVICES+=("order-service")
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE '^apps/frontend/'; then
+            SERVICES+=("frontend")
+          fi
+
+          # Root Gradle files can affect all backend services.
+          if echo "$CHANGED_FILES" | grep -qE '^(build\.gradle|settings\.gradle)$'; then
+            SERVICES+=(
+              "api-gateway"
+              "member-service"
+              "product-service"
+              "order-service"
+            )
+          fi
+
+          # If the CI workflow itself changes, test all services.
+          if echo "$CHANGED_FILES" | grep -qE '^\.github/workflows/build-push\.yml$'; then
+            SERVICES=(
+              "api-gateway"
+              "member-service"
+              "product-service"
+              "order-service"
+              "frontend"
+            )
+          fi
+
+          # Remove duplicates.
+          if [ ${#SERVICES[@]} -gt 0 ]; then
+            MATRIX="$(
+              printf '%s\n' "${SERVICES[@]}" |
+              sort -u |
+              jq -R . |
+              jq -sc .
+            )"
+
+            echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+            echo "Services to build: $MATRIX"
+          else
+            echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+
+            echo "No application services changed."
+          fi
+
+
+  # ==========================================================
+  # 2. Build Changed Docker Images and Push to Amazon ECR
   # ==========================================================
   build:
+    needs: changes
+
+    if: needs.changes.outputs.has_changes == 'true'
+
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - api-gateway
-          - member-service
-          - product-service
-          - order-service
-          - frontend
+        service: ${{ fromJSON(needs.changes.outputs.matrix) }}
 
     steps:
-      # 1. Checkout Repository
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. AWS OIDC Authentication
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -44,11 +139,9 @@ jobs:
           role-session-name: github-actions-${{ matrix.service }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      # 3. Login to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 4. Build Docker Image and Push to ECR
       - name: Build and push
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
@@ -62,25 +155,10 @@ jobs:
           echo "Tag      : $TAG"
           echo "=========================================="
 
-          if [ "$SERVICE" = "frontend" ]; then
-
-            echo "Building frontend..."
-
-            docker build \
-              -f "apps/frontend/Dockerfile" \
-              -t "$REGISTRY/$SERVICE:$TAG" \
-              .
-
-          else
-
-            echo "Building $SERVICE..."
-
-            docker build \
-              -f "apps/$SERVICE/Dockerfile" \
-              -t "$REGISTRY/$SERVICE:$TAG" \
-              .
-
-          fi
+          docker build \
+            -f "apps/$SERVICE/Dockerfile" \
+            -t "$REGISTRY/$SERVICE:$TAG" \
+            .
 
           echo "Pushing $REGISTRY/$SERVICE:$TAG"
 
@@ -90,43 +168,50 @@ jobs:
 
 
   # ==========================================================
-  # 2. Update GitOps Manifest
+  # 3. Update GitOps Manifest
   # ==========================================================
   deploy:
-    needs: build
+    needs:
+      - changes
+      - build
+
+    if: needs.changes.outputs.has_changes == 'true'
+
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout latest main branch
-      - name: Checkout
+      - name: Checkout latest main branch
         uses: actions/checkout@v4
         with:
           ref: main
 
-      # 2. Update Kustomize image tags
-      - name: Update production image tags
+      - name: Update changed production image tags
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
           TAG: ${{ github.sha }}
+          SERVICES: ${{ needs.changes.outputs.matrix }}
 
+        shell: bash
         run: |
           cd k8s/overlays/prod
 
-          kustomize edit set image \
-            "$REGISTRY/api-gateway=$REGISTRY/api-gateway:$TAG" \
-            "$REGISTRY/member-service=$REGISTRY/member-service:$TAG" \
-            "$REGISTRY/product-service=$REGISTRY/product-service:$TAG" \
-            "$REGISTRY/order-service=$REGISTRY/order-service:$TAG" \
-            "$REGISTRY/frontend=$REGISTRY/frontend:$TAG"
+          echo "Changed services: $SERVICES"
+
+          echo "$SERVICES" | jq -r '.[]' | while read SERVICE; do
+
+            echo "Updating $SERVICE -> $TAG"
+
+            kustomize edit set image \
+              "$REGISTRY/$SERVICE=$REGISTRY/$SERVICE:$TAG"
+
+          done
 
           echo "=========================================="
           echo "Updated production image tags"
-          echo "Tag: $TAG"
           echo "=========================================="
 
           cat kustomization.yaml
 
-      # 3. Commit and Push GitOps Manifest
       - name: Commit and push manifest
         env:
           TAG: ${{ github.sha }}
