@@ -50,3 +50,5 @@ public class MemberController {
         );
     }
 }
+
+// GitOps deployment test
