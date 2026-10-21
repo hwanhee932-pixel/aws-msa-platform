@@ -51,5 +51,3 @@ public class MemberController {
     }
 }
 
-// GitOps deployment test
-// Selective CI/CD test
