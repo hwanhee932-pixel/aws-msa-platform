@@ -19,7 +19,7 @@ images:
   newTag: 155738c5f42186321d5fc7106497a84589ad81b9
 - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
   newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/member-service
-  newTag: 3d807fe12dc661ba93fad40a121e6c3f1dc585e8
+  newTag: e8c1ad039b53afd2ac5d54a00de5ba1a0620db8c
 - name: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
   newName: 683668078297.dkr.ecr.ap-northeast-2.amazonaws.com/order-service
   newTag: 155738c5f42186321d5fc7106497a84589ad81b9
